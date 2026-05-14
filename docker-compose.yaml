@@ -1,40 +1,78 @@
+# ─── Adaptive LLM Gateway — Docker Compose ──────────────────────────────
+# Run `docker compose up -d` to bring up the gateway + Postgres.
+# Subscription CLIs (claude, codex, gh copilot, etc.) must live on the host
+# — Docker can't authenticate your subscriptions for you.
+
 services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: llm-gateway-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gateway
+      POSTGRES_PASSWORD: gateway
+      POSTGRES_DB: llm_gateway
+    volumes:
+      - gateway-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gateway"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - gateway-net
+
   llm-gateway:
     build: .
     container_name: llm-gateway
     ports:
-      - "3100:3100"
+      - "${PORT:-3103}:3103"
     environment:
       NODE_ENV: production
-      PORT: "3100"
-      DATABASE_URL: "${DATABASE_URL}"
-      OLLAMA_URL: "http://host.docker.internal:11434"
-      GITEA_URL: "http://localhost:3000"
+      PORT: "3103"
+      DATABASE_URL: "postgresql://gateway:gateway@postgres:5432/llm_gateway"
+      OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
+      DASHBOARD_AUTH_TOKEN: "${DASHBOARD_AUTH_TOKEN:-}"
+      AUTO_SPAWN_BRIDGES: "${AUTO_SPAWN_BRIDGES:-0}"
+      WATCHDOG_ENABLED: "${WATCHDOG_ENABLED:-0}"
+      LLM_GATEWAY_COMPRESSION_ENABLED: "${LLM_GATEWAY_COMPRESSION_ENABLED:-true}"
+      LLM_GATEWAY_MIN_TOKENS: "${LLM_GATEWAY_MIN_TOKENS:-700}"
+      LLM_GATEWAY_TARGET_TOKENS: "${LLM_GATEWAY_TARGET_TOKENS:-2400}"
+      # Free-tier + hosted provider keys (pass through from .env)
+      GROQ_API_KEY: "${GROQ_API_KEY:-}"
+      CEREBRAS_API_KEY: "${CEREBRAS_API_KEY:-}"
+      MISTRAL_API_KEY: "${MISTRAL_API_KEY:-}"
+      NVIDIA_API_KEY: "${NVIDIA_API_KEY:-}"
+      CLOUDFLARE_AI_TOKEN: "${CLOUDFLARE_AI_TOKEN:-}"
+      TOGETHER_API_KEY: "${TOGETHER_API_KEY:-}"
+      FIREWORKS_API_KEY: "${FIREWORKS_API_KEY:-}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      ANYSCALE_API_KEY: "${ANYSCALE_API_KEY:-}"
+      REPLICATE_API_TOKEN: "${REPLICATE_API_TOKEN:-}"
+      PERPLEXITY_API_KEY: "${PERPLEXITY_API_KEY:-}"
+      XAI_API_KEY: "${XAI_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      GOOGLE_API_KEY: "${GOOGLE_API_KEY:-}"
+    extra_hosts:
+      # Lets the container reach the Ollama running on the host
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O-", "http://localhost:3100/health/live"]
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:3103/health"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
       - gateway-net
 
-  llm-learning:
-    build:
-      context: packages/learning
-      dockerfile: Dockerfile
-    container_name: llm-learning
-    environment:
-      DATABASE_URL: "${DATABASE_URL}"
-      GATEWAY_URL: "http://llm-gateway:3100"
-    restart: unless-stopped
-    depends_on:
-      llm-gateway:
-        condition: service_healthy
-    networks:
-      - gateway-net
-
 networks:
   gateway-net:
     driver: bridge
+
+volumes:
+  gateway-db:

@@ -1,0 +1,53 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'  # weekly Monday 06:00 UTC
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install (root only, for audit)
+        run: npm install --ignore-scripts
+      - name: npm audit (high+critical)
+        run: npm audit --audit-level=high || true
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        language: [javascript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'

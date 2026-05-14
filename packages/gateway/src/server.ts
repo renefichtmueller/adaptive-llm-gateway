@@ -17,6 +17,7 @@ import { runMigrations } from './db/migrate.js';
 import { initPgBoss } from './queue/pg-boss-client.js';
 import { logger } from './observability/logger.js';
 import { scheduleLearningCycles } from './learning/learning-engine.js';
+import { autoSpawnOnBoot } from './modules/auto-discovery.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync, existsSync } from 'fs';
@@ -196,6 +197,8 @@ async function main() {
     scheduleLearningCycles();
     await server.listen({ port, host });
     logger.info({ port, host }, 'LLM Gateway started');
+    // Auto-spawn detected subscription bridges if AUTO_SPAWN_BRIDGES=1
+    void autoSpawnOnBoot();
   } catch (err) {
     logger.error({ err }, 'Failed to start server');
     process.exit(1);

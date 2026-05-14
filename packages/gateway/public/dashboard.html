@@ -127,13 +127,11 @@
     /* ─── Tab navigation ──────────────────────────────────────────────────── */
     .tabs {
       display: flex;
+      flex-wrap: wrap;
       gap: 0;
       border-bottom: 1px solid var(--line);
       margin: 0 0 28px;
-      overflow-x: auto;
-      scrollbar-width: none;
     }
-    .tabs::-webkit-scrollbar { display: none; }
     .tab-trigger {
       background: none;
       border: none;
@@ -498,7 +496,7 @@
     body.hide-empty-providers .wallet-card[data-status="unknown"] { display: none; }
 
     /* In Simple Mode, hide the noisy "5-axis" header explainer */
-    body.simple-mode .h-section .h-meta:contains('Lean-CTX') { display: none; }
+    body.simple-mode .h-section .h-meta:contains('LLM Gateway') { display: none; }
 
     /* ─── Hero (Buddy + Savings + Cost-VS) ───────────────────────────────── */
     .hero-grid {
@@ -1066,6 +1064,99 @@
       font-size: 0.8rem;
     }
 
+    /* ─── Discover Panel ──────────────────────────────────────────────── */
+    .discover-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px; margin-bottom: 16px;
+    }
+    .discover-card {
+      border: 1px solid var(--line-2);
+      border-radius: 10px;
+      padding: 12px 14px;
+      background: var(--surface-1, rgba(255,255,255,0.02));
+    }
+    .discover-card-title {
+      font-size: 0.72rem; color: var(--text-muted, #888);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .discover-card-stat {
+      font-family: var(--mono); font-size: 1.4rem;
+      color: var(--accent); margin-bottom: 8px;
+    }
+    .discover-card-list {
+      list-style: none; padding: 0; margin: 0;
+      font-size: 0.78rem; font-family: var(--mono);
+    }
+    .discover-card-list li {
+      padding: 4px 0;
+      border-top: 1px solid var(--line-1, rgba(255,255,255,0.05));
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .discover-card-list li:first-child { border-top: none; }
+    .discover-card-list .disc-ok { color: var(--accent); }
+    .discover-card-list .disc-no { color: var(--text-muted, #888); opacity: 0.6; }
+
+    /* ─── API Tab ──────────────────────────────────────────────────────── */
+    .api-card {
+      border: 1px solid var(--line-2);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      background: var(--surface-1, rgba(255,255,255,0.02));
+    }
+    .api-card-head {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .api-method {
+      font-family: var(--mono); font-size: 0.7rem; font-weight: 700;
+      padding: 3px 8px; border-radius: 4px;
+      background: var(--accent); color: #fff; letter-spacing: 0.05em;
+    }
+    .api-path {
+      font-family: var(--mono); font-size: 0.92rem;
+      color: var(--text);
+    }
+    .api-tag {
+      font-size: 0.72rem; color: var(--text-muted, #888);
+      font-style: italic; flex: 1;
+    }
+    .api-snippet {
+      font-family: var(--mono); font-size: 0.8rem;
+      background: var(--surface-2, rgba(0,0,0,0.25));
+      border: 1px solid var(--line-1, rgba(255,255,255,0.05));
+      padding: 12px 14px; border-radius: 6px;
+      overflow-x: auto; white-space: pre;
+      color: var(--text); margin: 0;
+    }
+    .api-snippet code { background: transparent; padding: 0; }
+    .api-copy { padding: 4px 12px; font-size: 0.7rem; }
+
+    .api-tryout {
+      border: 1px solid var(--line-2);
+      border-radius: 10px;
+      padding: 14px 16px;
+      background: var(--surface-1, rgba(255,255,255,0.02));
+    }
+    .api-tryout-row { display: flex; flex-wrap: wrap; align-items: center; }
+
+    .api-bridge-table-wrap { overflow-x: auto; border: 1px solid var(--line-2); border-radius: 10px; }
+    .api-bridge-table {
+      width: 100%; border-collapse: collapse; font-size: 0.85rem;
+    }
+    .api-bridge-table th, .api-bridge-table td {
+      padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line-1, rgba(255,255,255,0.05));
+    }
+    .api-bridge-table th {
+      font-weight: 600; color: var(--text-muted, #888);
+      text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.72rem;
+    }
+    .api-bridge-table tr:last-child td { border-bottom: none; }
+    .api-bridge-status { font-family: var(--mono); font-size: 0.78rem; }
+    .api-bridge-status.ok { color: var(--accent); }
+    .api-bridge-status.err { color: #e34; }
+
     /* ─── Buttons ────────────────────────────────────────────────────────── */
     .btn {
       font-family: var(--mono);
@@ -1338,6 +1429,7 @@
       <button class="tab-trigger" data-tab="leaderboard" role="tab" title="Race-mode results — fastest model leaderboard if you ran multi-model races"><span class="tab-num">08</span>races <span class="tab-badge" id="leaderboardTabBadge">·</span></button>
       <button class="tab-trigger" data-tab="share" role="tab" title="Generate an embeddable SVG card showing your savings (for blog/Twitter/README)"><span class="tab-num">09</span>share</button>
       <button class="tab-trigger" data-tab="report" role="tab" title="Generate a printable monthly PDF report"><span class="tab-num">10</span>report</button>
+      <button class="tab-trigger" data-tab="api" role="tab" title="API reference — copy-paste curl/SDK examples for OpenAI-compat, Anthropic-compat, native"><span class="tab-num">11</span>api</button>
     </nav>
 
     <!-- ─── Tab: Overview ────────────────────────────────────────────────── -->
@@ -1356,7 +1448,7 @@
           <div class="hero-counter"><span id="heroTokensSavedCombined">0</span><span style="font-size:1.1rem;color:var(--dim);font-weight:400;margin-left:8px;">tokens</span></div>
           <div class="hero-layer-breakdown" id="heroLayerBreakdown">
             <div class="layer-row"><span class="layer-name">⚡ Gateway (LLM calls)</span><span class="layer-val" id="heroTokensSaved">0</span></div>
-            <div class="layer-row" id="heroLeanCtxRow" style="display:none;"><span class="layer-name">🗜 Lean-CTX (tool calls)</span><span class="layer-val" id="heroLeanCtxTokens">—</span></div>
+            <div class="layer-row" id="heroExternalToolRow" style="display:none;"><span class="layer-name">🗜 External tool compression (legacy)</span><span class="layer-val" id="heroExternalToolTokens">—</span></div>
           </div>
           <div class="hero-row">
             <div class="hero-pill">
@@ -1392,8 +1484,8 @@
         </div>
       </div>
 
-      <!-- ─── Five-Axis Savings Breakdown — what makes us better than Lean-CTX ── -->
-      <h2 class="h-section">Savings Sources <span class="h-meta">we measure 5 axes — Lean-CTX measures 1</span></h2>
+      <!-- ─── Five-Axis Savings Breakdown — full savings breakdown ── -->
+      <h2 class="h-section">Savings Sources <span class="h-meta">5 measurement axes across all calls</span></h2>
       <div class="savings-axes" id="savingsAxes">
         <div class="loading">loading</div>
       </div>
@@ -1472,8 +1564,34 @@
           <strong>auto-gateway</strong> <span id="subsAutoState">detection only</span>
           — installed CLI subscriptions are wrapped into HTTP bridges and exposed via <code>/v1/chat/completions</code>
         </div>
-        <button class="btn btn-sm primary" id="subsSpawnBtn" type="button">⟳ spawn missing bridges</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm" id="discoverFullBtn" type="button" title="Full-system scan: CLIs + local LLMs + API keys, then auto-spawn any detected bridges">⚡ discover & connect all</button>
+          <button class="btn btn-sm primary" id="subsSpawnBtn" type="button">⟳ spawn missing bridges</button>
+        </div>
       </div>
+
+      <!-- ── Full discovery report (populated by discover button) ────────── -->
+      <div id="discoverReportWrap" style="display: none; margin-bottom: 14px;">
+        <h2 class="h-section">Discovery Report <span class="h-meta" id="discoverReportMeta">—</span></h2>
+        <div class="discover-grid">
+          <div class="discover-card">
+            <div class="discover-card-title">CLI Subscriptions</div>
+            <div class="discover-card-stat"><span id="discCntSubs">0</span> detected</div>
+            <ul class="discover-card-list" id="discListSubs"></ul>
+          </div>
+          <div class="discover-card">
+            <div class="discover-card-title">Local LLM Servers</div>
+            <div class="discover-card-stat"><span id="discCntLocal">0</span> running</div>
+            <ul class="discover-card-list" id="discListLocal"></ul>
+          </div>
+          <div class="discover-card">
+            <div class="discover-card-title">API-Key Providers</div>
+            <div class="discover-card-stat"><span id="discCntKeys">0</span> configured</div>
+            <ul class="discover-card-list" id="discListKeys"></ul>
+          </div>
+        </div>
+      </div>
+
       <div class="subs-grid" id="subscriptionsList">
         <div class="loading">discovering installed subscriptions</div>
       </div>
@@ -1673,6 +1791,136 @@
         <button class="btn primary" id="reportOpen" type="button">open report</button>
       </div>
       <div class="share-hint">Tip: in the report window, press <code>Cmd/Ctrl+P</code> → "Save as PDF". The report is fully styled for A4 print.</div>
+    </section>
+
+    <!-- ─── Tab: API Reference ─────────────────────────────────────────── -->
+    <section class="tab-panel" data-tab="api">
+      <h2 class="h-section">API Reference <span class="h-meta">all endpoints route through compression + caller tracking</span></h2>
+
+      <div class="api-intro" style="margin: 8px 0 16px; color: var(--text-muted, #888); font-size: 13px; line-height: 1.5;">
+        The LLM Gateway exposes three POST endpoints and one GET. Every call is logged in
+        <em>activity</em>, compressed when input ≥ 700 tokens, and routed via <code>routing-rules.yaml</code>
+        to the right subscription bridge (Claude Code, ChatGPT, Copilot, M365 Copilot, Codex) or local Ollama.
+      </div>
+
+      <!-- ── Endpoint card: OpenAI-compatible ─────────────────────────── -->
+      <div class="api-card" data-endpoint="chat">
+        <div class="api-card-head">
+          <span class="api-method">POST</span>
+          <code class="api-path">/v1/chat/completions</code>
+          <span class="api-tag">OpenAI-compatible · works with `openai` SDK</span>
+          <button class="btn ghost api-copy" data-target="api-snippet-chat" type="button">copy</button>
+        </div>
+        <pre id="api-snippet-chat" class="api-snippet"><code>curl https://llm-gateway.context-x.org/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4.6",
+    "messages": [{"role": "user", "content": "hi"}]
+  }'</code></pre>
+      </div>
+
+      <!-- ── Endpoint card: Anthropic-compatible ──────────────────────── -->
+      <div class="api-card" data-endpoint="messages">
+        <div class="api-card-head">
+          <span class="api-method">POST</span>
+          <code class="api-path">/v1/messages</code>
+          <span class="api-tag">Anthropic-compatible · works with `@anthropic-ai/sdk`</span>
+          <button class="btn ghost api-copy" data-target="api-snippet-messages" type="button">copy</button>
+        </div>
+        <pre id="api-snippet-messages" class="api-snippet"><code>curl https://llm-gateway.context-x.org/v1/messages \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4.6",
+    "messages": [{"role": "user", "content": "hi"}],
+    "max_tokens": 1024
+  }'</code></pre>
+      </div>
+
+      <!-- ── Endpoint card: Native ────────────────────────────────────── -->
+      <div class="api-card" data-endpoint="completion">
+        <div class="api-card-head">
+          <span class="api-method">POST</span>
+          <code class="api-path">/v1/completion</code>
+          <span class="api-tag">native — full caller-tracking + compression options</span>
+          <button class="btn ghost api-copy" data-target="api-snippet-completion" type="button">copy</button>
+        </div>
+        <pre id="api-snippet-completion" class="api-snippet"><code>curl https://llm-gateway.context-x.org/v1/completion \
+  -H "Content-Type: application/json" \
+  -d '{
+    "caller": "my-app",
+    "task_type": "generic_qa",
+    "input": "your prompt here",
+    "options": { "compression": { "enabled": true, "mode": "auto" } }
+  }'</code></pre>
+      </div>
+
+      <!-- ── Endpoint card: Models list ───────────────────────────────── -->
+      <div class="api-card" data-endpoint="models">
+        <div class="api-card-head">
+          <span class="api-method">GET</span>
+          <code class="api-path">/v1/models</code>
+          <span class="api-tag">list every model the gateway can route to</span>
+          <button class="btn ghost api-copy" data-target="api-snippet-models" type="button">copy</button>
+        </div>
+        <pre id="api-snippet-models" class="api-snippet"><code>curl https://llm-gateway.context-x.org/v1/models</code></pre>
+      </div>
+
+      <!-- ── Try-It-Out playground ────────────────────────────────────── -->
+      <h2 class="h-section" style="margin-top: 28px;">Try it out <span class="h-meta">live POST against the gateway</span></h2>
+      <div class="api-tryout">
+        <div class="api-tryout-row">
+          <label class="settings-row-label">Endpoint:
+            <select id="apiTryEndpoint" class="settings-input" style="width: 220px; margin-left: 8px;">
+              <option value="/v1/completion">/v1/completion (native)</option>
+              <option value="/v1/chat/completions">/v1/chat/completions (OpenAI)</option>
+              <option value="/v1/messages">/v1/messages (Anthropic)</option>
+            </select>
+          </label>
+          <label class="settings-row-label" style="margin-left: 18px;">Model:
+            <input id="apiTryModel" class="settings-input" type="text" value="claude-sonnet-4.6" style="width: 200px; margin-left: 8px;">
+          </label>
+        </div>
+        <label class="settings-row-label" style="display: block; margin-top: 10px;">Prompt:
+          <textarea id="apiTryPrompt" class="settings-input" rows="4" style="width: 100%; margin-top: 6px;" placeholder="Type your prompt — long inputs (>700 tokens) will be compressed automatically.">Say hello in three different languages.</textarea>
+        </label>
+        <div style="margin-top: 10px;">
+          <button class="btn primary" id="apiTryRun" type="button">send request</button>
+          <span id="apiTryStatus" style="margin-left: 12px; font-size: 12px; color: var(--text-muted, #888);"></span>
+        </div>
+        <div id="apiTryResultWrap" style="margin-top: 14px; display: none;">
+          <div class="api-tryout-meta" id="apiTryMeta" style="font-size: 12px; color: var(--text-muted, #888); margin-bottom: 6px;"></div>
+          <pre class="api-snippet"><code id="apiTryResult"></code></pre>
+        </div>
+      </div>
+
+      <!-- ── Bridge mapping (model → subscription) ────────────────────── -->
+      <h2 class="h-section" style="margin-top: 28px;">Model → Bridge Mapping <span class="h-meta">which subscription each model alias routes to</span></h2>
+      <div class="api-bridge-table-wrap">
+        <table class="api-bridge-table" id="apiBridgeTable">
+          <thead>
+            <tr>
+              <th>Model alias</th>
+              <th>Bridge</th>
+              <th>Subscription used</th>
+              <th>Port</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>claude-sonnet-4.6</code>, <code>claude-haiku</code>, <code>claude-opus</code></td><td>claude-bridge</td><td>Claude Code Max (OAuth)</td><td>3250</td><td class="api-bridge-status" data-bridge="claude-bridge">—</td></tr>
+            <tr><td><code>gpt-4o</code>, <code>gpt-4.1</code>, <code>gpt-5.x</code></td><td>openai-bridge</td><td>ChatGPT Plus / Pro</td><td>3251</td><td class="api-bridge-status" data-bridge="openai-bridge">—</td></tr>
+            <tr><td><code>copilot-gpt-4o</code>, <code>copilot-claude-3.7</code></td><td>copilot-bridge</td><td>GitHub Copilot</td><td>3252</td><td class="api-bridge-status" data-bridge="copilot-bridge">—</td></tr>
+            <tr><td><code>codex-mini</code>, <code>gpt-5.1-codex-mini</code></td><td>codex-bridge</td><td>OpenAI Codex CLI</td><td>3253</td><td class="api-bridge-status" data-bridge="codex-bridge">—</td></tr>
+            <tr><td><code>m365-copilot</code></td><td>m365-copilot-bridge</td><td>Microsoft 365 Copilot</td><td>3257</td><td class="api-bridge-status" data-bridge="m365-copilot-bridge">—</td></tr>
+            <tr><td><code>qwen2.5:3b / 7b / 14b / 32b</code>, <code>magatama:32b</code>, <code>magatama-coder</code></td><td>ollama (Mac Studio)</td><td>local — no cost</td><td>11434</td><td class="api-bridge-status" data-bridge="ollama">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="share-hint" style="margin-top: 12px;">
+        The gateway picks the bridge from <code>routing-rules.yaml</code> based on <code>task_type</code> and the
+        requested <code>model</code>. You can also hit a bridge directly (e.g. <code>http://82.165.222.127:3250/v1/messages</code>)
+        — but then you bypass compression, savings tracking, and the routing rules.
+      </div>
     </section>
 
     <!-- ─── Caller Deep-Dive Modal ───────────────────────────────────── -->
@@ -1883,6 +2131,9 @@
       el.innerHTML = clients.map(client => {
         const lastSeen = client.lastSeen ? new Date(client.lastSeen).toLocaleString() : 'never';
         const callerList = client.callers?.length ? client.callers.join(', ') : 'no caller id seen';
+        const bridgeState = client.bridgeProvider
+          ? `${client.bridgeProvider}: ${client.bridgeStatus || 'not configured'}${client.bridgeDetail ? ` (${client.bridgeDetail})` : ''}`
+          : 'bridge: OpenAI-compatible / manual client config';
         return `
           <div class="client-item">
             <div class="client-top">
@@ -1892,6 +2143,7 @@
             <div class="client-meta">
               <div><strong>${formatNumber(client.requestCount)}</strong> requests · <strong>${formatNumber(client.tokensSaved)}</strong> saved</div>
               <div title="${escapeHtml(callerList)}">caller: ${escapeHtml(callerList)}</div>
+              <div title="${escapeHtml(bridgeState)}">gateway: ${escapeHtml(bridgeState)}</div>
               <div>last: ${escapeHtml(lastSeen)}</div>
             </div>
           </div>
@@ -2137,6 +2389,60 @@
       `;
     }
 
+    // ─── Full Discovery: CLIs + Local LLMs + API Keys ────────────────────
+    document.getElementById('discoverFullBtn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('discoverFullBtn');
+      const wrap = document.getElementById('discoverReportWrap');
+      const meta = document.getElementById('discoverReportMeta');
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = '⏳ scanning…';
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/discover`, { method: 'POST' });
+        const payload = await res.json();
+        if (!payload.success) throw new Error(payload.error || 'discovery failed');
+        const r = payload.data.report;
+        const spawnedCount = payload.data.spawnedCount;
+
+        wrap.style.display = 'block';
+        meta.textContent = `host: ${r.host} · scanned: ${new Date(r.generatedAt).toLocaleTimeString()} · ${spawnedCount} bridges spawned · ${r.summary.totalProviders} total providers, ${r.summary.totalRoutableModels} models`;
+
+        // CLI subscriptions
+        document.getElementById('discCntSubs').textContent = r.subscriptions.detected;
+        document.getElementById('discListSubs').innerHTML = r.subscriptions.items.map(s => `
+          <li>
+            <span>${s.descriptor.label}</span>
+            <span class="${s.installed ? 'disc-ok' : 'disc-no'}">${s.installed ? (s.authenticated === true ? '✓ auth' : (s.authenticated === false ? '⚠ unauth' : '?')) : '—'}</span>
+          </li>
+        `).join('');
+
+        // Local LLM servers
+        document.getElementById('discCntLocal').textContent = r.localLLMs.detected;
+        document.getElementById('discListLocal').innerHTML = r.localLLMs.items.map(l => `
+          <li>
+            <span>${l.label}<br><span style="font-size:0.66rem;opacity:0.6;">${l.url}</span></span>
+            <span class="${l.detected ? 'disc-ok' : 'disc-no'}">${l.detected ? `✓ ${l.models.length} models · ${l.latencyMs}ms` : '— offline'}</span>
+          </li>
+        `).join('');
+
+        // API-key providers
+        document.getElementById('discCntKeys').textContent = r.apiKeys.configured;
+        document.getElementById('discListKeys').innerHTML = r.apiKeys.items.map(k => `
+          <li>
+            <span>${k.label}<br><span style="font-size:0.66rem;opacity:0.6;">${k.envKey}</span></span>
+            <span class="${k.configured ? 'disc-ok' : 'disc-no'}">${k.configured ? '✓ set' : '— missing'}</span>
+          </li>
+        `).join('');
+
+        btn.textContent = `✓ found ${r.summary.totalProviders}`;
+        await loadSubscriptions();
+      } catch (e) {
+        btn.textContent = `✗ ${e.message}`;
+      } finally {
+        setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 3000);
+      }
+    });
+
     document.getElementById('subsSpawnBtn').addEventListener('click', async () => {
       const btn = document.getElementById('subsSpawnBtn');
       btn.disabled = true;
@@ -2235,7 +2541,7 @@
       document.getElementById('routingModeBadge').textContent = s.routingMode;
 
       // UI mode toggles
-      const ui = s.ui ?? { simpleMode: true, hideEmptyProviders: true, showTooltips: true };
+      const ui = s.ui ?? { simpleMode: false, hideEmptyProviders: true, showTooltips: true };
       document.getElementById('uiSimpleMode').checked = !!ui.simpleMode;
       document.getElementById('uiHideEmpty').checked = !!ui.hideEmptyProviders;
       document.getElementById('uiTooltips').checked = !!ui.showTooltips;
@@ -2618,9 +2924,9 @@
       `;
     }
 
-    // Try to fetch Lean-CTX stats from localhost:3333 (browser-side, not server-side)
-    // Returns null if Lean-CTX not running OR dashboard browsed from different machine.
-    async function fetchLeanCtxStats() {
+    // Try to fetch external tool stats from localhost:3333 (legacy compat) (browser-side, not server-side)
+    // Returns null if no external tool runs there.
+    async function fetchExternalToolStats() {
       try {
         const ctrl = new AbortController();
         setTimeout(() => ctrl.abort(), 1500);
@@ -2645,15 +2951,15 @@
       document.getElementById('heroCacheHits').textContent = s.totalHits;
       document.getElementById('heroSavingsRate').textContent = `${s.hitRatePercent || 0}%`;
 
-      // Lean-CTX integration: pull from localhost:3333 if available
-      const leanCtx = await fetchLeanCtxStats();
-      const combined = gatewayTokens + (leanCtx?.saved || 0);
+      // Optional external-tool integration: pull from localhost:3333 if running
+      const externalTool = await fetchExternalToolStats();
+      const combined = gatewayTokens + (externalTool?.saved || 0);
       document.getElementById('heroTokensSavedCombined').textContent = formatNumber(combined);
-      if (leanCtx) {
-        document.getElementById('heroLeanCtxRow').style.display = 'flex';
-        document.getElementById('heroLeanCtxTokens').textContent = formatNumber(leanCtx.saved);
+      if (externalTool) {
+        document.getElementById('heroExternalToolRow').style.display = 'flex';
+        document.getElementById('heroExternalToolTokens').textContent = formatNumber(externalTool.saved);
       } else {
-        document.getElementById('heroLeanCtxRow').style.display = 'none';
+        document.getElementById('heroExternalToolRow').style.display = 'none';
       }
       document.getElementById('costWithout').textContent = formatCost(c.costWithoutGateway || 0);
       document.getElementById('costWith').textContent = formatCost(c.costWithGateway || 0);
@@ -3070,8 +3376,97 @@
         if (target === 'memory') loadMemoryGraph();
         if (target === 'leaderboard') loadLeaderboard();
         if (target === 'share') refreshShareCard();
+        if (target === 'api') refreshApiBridgeStatus();
       });
     });
+
+    // ─── API Tab — copy buttons, try-it-out, bridge status ────────────────
+    function copyToClipboard(text) {
+      if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      return Promise.resolve();
+    }
+    document.querySelectorAll('.api-copy').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const targetId = btn.dataset.target;
+        const snippet = document.getElementById(targetId)?.innerText || '';
+        await copyToClipboard(snippet);
+        const orig = btn.textContent;
+        btn.textContent = 'copied ✓';
+        setTimeout(() => { btn.textContent = orig; }, 1400);
+      });
+    });
+
+    document.getElementById('apiTryRun')?.addEventListener('click', async () => {
+      const endpoint = document.getElementById('apiTryEndpoint').value;
+      const model = document.getElementById('apiTryModel').value || 'claude-sonnet-4.6';
+      const prompt = document.getElementById('apiTryPrompt').value || '';
+      const status = document.getElementById('apiTryStatus');
+      const meta = document.getElementById('apiTryMeta');
+      const wrap = document.getElementById('apiTryResultWrap');
+      const out = document.getElementById('apiTryResult');
+      if (!prompt.trim()) { status.textContent = 'add a prompt first'; return; }
+
+      let body;
+      if (endpoint === '/v1/completion') {
+        body = { caller: 'dashboard-tryout', task_type: 'generic_qa', input: prompt, options: { compression: { enabled: true, mode: 'auto' } } };
+      } else if (endpoint === '/v1/chat/completions') {
+        body = { model, messages: [{ role: 'user', content: prompt }] };
+      } else {
+        body = { model, messages: [{ role: 'user', content: prompt }], max_tokens: 1024 };
+      }
+
+      status.textContent = 'sending…';
+      const t0 = performance.now();
+      try {
+        const res = await fetch((API_BASE || location.origin) + endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const dtMs = Math.round(performance.now() - t0);
+        const json = await res.json().catch(() => ({}));
+        status.textContent = `${res.status} ${res.statusText} · ${dtMs} ms`;
+        const c = json?.compression || (json?.metadata?.compression) || null;
+        if (c) {
+          meta.textContent = `compression: applied=${c.applied} · method=${c.method} · before=${c.tokens_before} after=${c.tokens_after} saved=${c.tokens_saved}`;
+        } else {
+          meta.textContent = 'no compression metadata in response';
+        }
+        out.textContent = JSON.stringify(json, null, 2);
+        wrap.style.display = 'block';
+      } catch (err) {
+        status.textContent = 'error: ' + (err.message || err);
+      }
+    });
+
+    async function refreshApiBridgeStatus() {
+      try {
+        const res = await fetch((API_BASE || location.origin) + '/api/dashboard/providers');
+        if (!res.ok) return;
+        const json = await res.json();
+        const allProviders = [
+          ...((json?.data?.grouped?.subscription) || []),
+          ...((json?.data?.grouped?.local) || []),
+        ];
+        document.querySelectorAll('.api-bridge-status').forEach(cell => {
+          const name = cell.dataset.bridge;
+          const p = allProviders.find(x => x.name === name);
+          if (!p) { cell.textContent = 'unknown'; cell.classList.add('err'); return; }
+          if (p.enabled && p.status === 'configured') {
+            cell.textContent = '✓ online';
+            cell.classList.add('ok');
+          } else {
+            cell.textContent = p.status || 'disabled';
+            cell.classList.add('err');
+          }
+        });
+      } catch {
+        /* silent */
+      }
+    }
 
     // ─── Init ────────────────────────────────────────────────────────────
     async function init() {
@@ -3090,7 +3485,7 @@
         if (payload.success) {
           document.getElementById('routingModeBadge').textContent = payload.data.routingMode;
           // Apply UI mode (Simple Mode etc.) immediately on load
-          applyUiMode(payload.data.ui ?? { simpleMode: true, hideEmptyProviders: true, showTooltips: true });
+          applyUiMode(payload.data.ui ?? { simpleMode: false, hideEmptyProviders: true, showTooltips: true });
         }
       } catch (e) { /* non-fatal */ }
 

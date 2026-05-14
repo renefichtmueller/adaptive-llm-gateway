@@ -9,6 +9,7 @@ import { createRequestLogger } from '../modules/request-logger.js';
 import { globalRequestStream } from '../modules/request-stream.js';
 import { getAvailableProviders, getAllProviders } from '../pipeline/external-providers.js';
 import { discoverSubscriptions } from '../modules/subscription-discovery.js';
+import { runDiscovery, runDiscoveryAndSpawn } from '../modules/auto-discovery.js';
 import { getRunningBridges, spawnDetectedBridges } from '../modules/bridge-spawner.js';
 import { getPublicSettings, saveSettings, SettingsPatchSchema } from '../modules/settings-store.js';
 import {
@@ -158,6 +159,15 @@ const CLIENT_CATALOG = [
 
 type ClientStatus = 'live' | 'running' | 'installed' | 'not-connected';
 
+const CLIENT_BRIDGE_PROVIDERS: Record<(typeof CLIENT_CATALOG)[number]['id'], string | undefined> = {
+  'codex-desktop': 'codex',
+  'claude-desktop': 'claude-code',
+  'microsoft-copilot': 'm365-copilot-bridge',
+  'github-copilot': 'copilot-bridge',
+  chatgpt: 'chatgpt-bridge',
+  'openai-compatible': undefined,
+};
+
 function expandUserPath(path: string): string {
   return path.startsWith('~/') ? `${homedir()}/${path.slice(2)}` : path;
 }
@@ -217,8 +227,22 @@ async function getGatewayClientCoverage(hoursBack: number = 24): Promise<Array<{
   tokensSaved: number;
   source: 'gateway' | 'local-detection' | 'none';
   detectionSignals: string[];
+  bridgeProvider?: string;
+  bridgeStatus?: string;
+  bridgeHealthy?: boolean;
+  bridgeDetail?: string;
 }>> {
   const detections = await getLocalDesktopDetections();
+  const bridgeRuntimes = Object.fromEntries(await Promise.all(CLIENT_CATALOG.map(async (client) => {
+    const providerName = CLIENT_BRIDGE_PROVIDERS[client.id];
+    return [
+      client.id,
+      {
+        providerName,
+        ...(providerName ? await providerRuntime(providerName) : {}),
+      },
+    ] as const;
+  })));
   let callers: Array<{ caller: string; requestCount: number; lastSeen?: string; tokensIn: number; tokensSaved: number }> = [];
 
   try {
@@ -259,6 +283,7 @@ async function getGatewayClientCoverage(hoursBack: number = 24): Promise<Array<{
 
   return CLIENT_CATALOG.map((client) => {
     const detection = detections[client.id];
+    const bridgeRuntime = bridgeRuntimes[client.id];
     const matched = callers.filter((row) => {
       const caller = row.caller.toLowerCase();
       return client.patterns.some((pattern) => caller.includes(pattern));
@@ -283,6 +308,10 @@ async function getGatewayClientCoverage(hoursBack: number = 24): Promise<Array<{
       tokensSaved,
       source: requestCount > 0 ? 'gateway' : detection?.installed ? 'local-detection' : 'none',
       detectionSignals: detection?.signals ?? [],
+      bridgeProvider: bridgeRuntime?.providerName,
+      bridgeStatus: bridgeRuntime?.runtimeStatus,
+      bridgeHealthy: bridgeRuntime?.runtimeHealthy,
+      bridgeDetail: bridgeRuntime?.runtimeDetail,
     };
   });
 }
@@ -1070,6 +1099,36 @@ export async function dashboardRoute(fastify: FastifyInstance): Promise<void> {
     } catch (error) {
       logger.error({ error }, 'Failed to discover subscriptions');
       return reply.status(500).send({ success: false, error: 'Failed to discover subscriptions' });
+    }
+  });
+
+  // ─── Full-System Auto-Discovery ─────────────────────────────────────────
+  // GET  /api/dashboard/discover         → unified report (read-only)
+  // POST /api/dashboard/discover         → discover + spawn bridges
+  fastify.get('/api/dashboard/discover', dashboardAuth, async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const report = await runDiscovery();
+      return reply.send({ success: true, data: report });
+    } catch (error) {
+      logger.error({ error }, 'Discovery scan failed');
+      return reply.status(500).send({ success: false, error: 'Discovery scan failed' });
+    }
+  });
+
+  fastify.post('/api/dashboard/discover', dashboardAuth, async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const result = await runDiscoveryAndSpawn();
+      return reply.send({
+        success: true,
+        data: {
+          report: result.report,
+          spawned: result.spawned,
+          spawnedCount: result.spawned.length,
+        },
+      });
+    } catch (error) {
+      logger.error({ error }, 'Discovery + spawn failed');
+      return reply.status(500).send({ success: false, error: 'Discovery + spawn failed' });
     }
   });
 
