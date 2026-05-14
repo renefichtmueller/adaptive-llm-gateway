@@ -1,0 +1,47 @@
+# Screenshots
+
+Drop PNGs here, named exactly as shown below, and the main README will
+pick them up automatically. Recommended dimensions: **1600×1000** at 2x
+(retina) or 1280×800 at 1x. PNG, < 500 KB each (run through `pngquant`).
+
+## Required captures
+
+| Filename | What to capture | Tab to open |
+|---|---|---|
+| `01-overview.png` | Hero stats: tokens saved, cost-without-vs-with, buddy, daily activity heatmap, forecast | **01 overview** |
+| `02-subscriptions.png` | The auto-gateway banner, both buttons (⚡ discover & connect all and ⟳ spawn missing bridges), all detected subscription cards in a grid | **02 subscriptions** |
+| `03-api-tab.png` | The four API endpoint cards (chat/completions, messages, completion, models), the try-it-out section with a real response, and the bridge mapping table | **11 api** |
+| `04-activity.png` | The live request log table with timestamps, callers, models, status badges | **04 activity** |
+| `05-savings.png` | The 5-axis breakdown chart, savings sources, top callers, top models | **05 savings** |
+
+## Optional captures
+
+| Filename | What to capture |
+|---|---|
+| `06-wallet.png` | Subscription-quota wallet showing usage of each subscription this billing period |
+| `07-memory.png` | Knowledge-graph view of facts the gateway has accumulated per caller |
+| `08-races.png` | Multi-model race results — leaderboard of model speed/quality wins |
+| `09-discover-report.png` | Result of clicking **⚡ discover & connect all** — three-column report card |
+| `10-dashboard-dark.png` | Same dashboard with dark-mode toggle (if applicable) |
+
+## How to capture them
+
+1. Run the gateway locally (`docker compose up -d`)
+2. Open `http://localhost:3103`
+3. Either click each tab manually and `Cmd+Shift+4` (macOS) / `Win+Shift+S` (Windows), or use Playwright:
+
+```bash
+npm install -D playwright
+npx playwright codegen http://localhost:3103
+# … click around, save screenshots
+```
+
+A scripted capture flow is in [`scripts/capture-screenshots.mjs`](../../scripts/capture-screenshots.mjs)
+(run with `node scripts/capture-screenshots.mjs http://localhost:3103`).
+
+## Hosting
+
+For the public README to show images even in cloned tarballs, commit the
+PNGs directly. For the GitHub-rendered page only, you can also paste
+images into a release-note draft and use the `user-images.githubusercontent.com`
+CDN URL — but that breaks for forks, so we prefer the in-repo copy.
