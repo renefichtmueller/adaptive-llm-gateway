@@ -1,0 +1,21 @@
+# .security-scan-allowlist — patterns intentionally present in this project.
+# Each line is an extended regex; lines matching it (within file CONTENT only,
+# not file paths) are skipped by ~/.claude/hooks/lib/security-scan-core.sh.
+#
+# Keep this list SHORT and JUSTIFIED. Never use a project-name pattern that
+# could also substring-match a leaked URL — that's how leaks slip through.
+
+# Project owner appears in GitHub URLs (badges, clone instructions).
+github\.com/renefichtmueller/adaptive-llm-gateway
+
+# Documented install paths for the OSS user. The bridge directories named
+# here are this project's own deploy targets, not external infrastructure.
+/opt/llm-gateway(/|$|")
+/opt/(openai|claude|copilot|codex|gemini|m365-copilot|aider)-bridge(/|$|")
+
+# npm scoped package + package.json name field.
+@llm-gateway/
+"name":[[:space:]]*"llm-gateway
+
+# Comments / log messages referencing the project name without a hostname.
+(PM2 entry point|Build-drift guard|deployed to|Deploy(ing)?) for? .*llm-gateway
