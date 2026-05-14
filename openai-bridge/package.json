@@ -1,0 +1,20 @@
+{
+  "name": "openai-bridge",
+  "version": "1.0.0",
+  "description": "OpenAI API bridge for ChatGPT and Codex integration",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "pm2": "pm2 start server.js --name openai-bridge"
+  },
+  "keywords": [
+    "openai",
+    "chatgpt",
+    "codex",
+    "bridge",
+    "llm"
+  ],
+  "author": "renefichtmueller",
+  "license": "MIT"
+}

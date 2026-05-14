@@ -1,0 +1,31 @@
+{
+  "name": "@llm-gateway/claude-code-bridge",
+  "version": "1.0.0",
+  "description": "Claude Code IDE integration with LLM Gateway",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@llm-gateway/client": "*",
+    "anthropic": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "keywords": [
+    "claude",
+    "code",
+    "llm",
+    "gateway",
+    "ide"
+  ],
+  "license": "MIT",
+  "author": "Adaptive LLM Gateway maintainers"
+}

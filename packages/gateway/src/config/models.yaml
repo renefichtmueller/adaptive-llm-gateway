@@ -1,0 +1,63 @@
+# ─── Models known to the gateway ──────────────────────────────────────────
+# Each entry maps a model alias to its tier, context length, and provider.
+# Auto-discovery fills in the runtime-detected models from your local Ollama
+# server at startup. You can also declare extra models here manually.
+
+ollama_base_url: "http://localhost:11434"
+
+models:
+  # ─── Local Ollama (auto-detected at runtime) ────────────────────────────
+  qwen2.5:3b:
+    tier: fast
+    context_length: 32768
+    provider: ollama
+    description: "Lightweight model — pre-classifier, simple Q&A, banlist detection"
+
+  qwen2.5:7b-instruct:
+    tier: fast
+    context_length: 32768
+    provider: ollama
+    description: "Fast instruction-tuned model for short tasks"
+
+  qwen2.5-coder:7b-instruct:
+    tier: fast
+    context_length: 32768
+    provider: ollama
+    description: "Code-focused variant of qwen2.5"
+
+  qwen2.5:14b:
+    tier: medium
+    context_length: 131072
+    provider: ollama
+    description: "Default medium-tier workhorse"
+
+  qwen2.5:32b:
+    tier: large
+    context_length: 131072
+    provider: ollama
+    description: "Heavy reasoning, blog generation, long-context tasks"
+
+  llama3.3:70b:
+    tier: reasoning
+    context_length: 131072
+    provider: ollama
+    description: "Highest local reasoning quality (requires significant RAM)"
+
+  # ─── Subscription bridges (auto-detected via subscription-discovery) ─────
+  claude-sonnet-4-5:
+    tier: large
+    context_length: 200000
+    provider: claude-bridge
+    description: "Routed via Claude Code Max subscription"
+
+  gpt-4o:
+    tier: large
+    context_length: 128000
+    provider: openai-bridge
+    description: "Routed via ChatGPT Plus / Pro subscription"
+
+# ─── Tier semantics ──────────────────────────────────────────────────────
+# fast       — sub-second, low-quality. Use for classification, banlist, JSON
+# medium     — 1-5s, good quality. Default for most prompts
+# large      — 5-30s, high quality. Long-form output, complex reasoning
+# reasoning  — 30s+, strongest. Multi-step problems, code generation

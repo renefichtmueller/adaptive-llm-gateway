@@ -1,0 +1,3501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llm.gateway / workbench</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ─── Reset ──────────────────────────────────────────────────────────── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #f4f7fa; color: #24313d; }
+
+    /* ─── Design tokens ──────────────────────────────────────────────────── */
+    :root {
+      --bg: #f4f7fa;
+      --bg-1: #ffffff;
+      --bg-2: #eef3f6;
+      --bg-3: #dde7ed;
+      --line: #d6e0e7;
+      --line-2: #bdc9d3;
+      --line-3: #8799a8;
+      --text: #24313d;
+      --dim: #667684;
+      --dim-2: #93a1ad;
+      --accent: #0f766e;
+      --accent-dim: #8ab9b5;
+      --warn: #b45309;
+      --err: #b42318;
+      --ok: #15803d;
+      --info: #2563eb;
+      --mono: 'JetBrains Mono', 'SF Mono', 'Menlo', 'Consolas', monospace;
+      --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+
+    body {
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+      background: var(--bg);
+    }
+
+    /* ─── Layout shell ──────────────────────────────────────────────────── */
+    .shell {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 20px 32px 80px;
+    }
+
+    /* ─── Top bar ────────────────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 8px;
+    }
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      font-family: var(--mono);
+    }
+    .brand-mark {
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .brand-mark::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 10px;
+      background: var(--accent);
+    }
+    .brand-tag {
+      font-size: 0.72rem;
+      color: var(--dim);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .brand-tag::before { content: '/ '; color: var(--dim-2); }
+
+    .topbar-actions { display: flex; align-items: center; gap: 10px; }
+
+    /* ─── Status strip ──────────────────────────────────────────────────── */
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 10px 0 18px;
+      border-bottom: 1px solid var(--line);
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      flex-wrap: wrap;
+    }
+    .status-cell {
+      padding: 4px 14px;
+      border-right: 1px solid var(--line);
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-cell:first-child { padding-left: 0; }
+    .status-cell:last-child { border-right: none; margin-left: auto; }
+    .status-cell .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--dim-2);
+      box-shadow: 0 0 0 0 currentColor;
+    }
+    .status-cell .dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(21,128,61,0.12); animation: pulse 2.4s infinite; }
+    .status-cell .dot.err { background: var(--err); }
+    .status-cell .label { color: var(--dim-2); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.68rem; }
+    .status-cell .val { color: var(--text); }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 3px rgba(21,128,61,0.10); }
+      50% { box-shadow: 0 0 0 6px rgba(21,128,61,0.06); }
+    }
+
+    /* ─── Tab navigation ──────────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      border-bottom: 1px solid var(--line);
+      margin: 0 0 28px;
+    }
+    .tab-trigger {
+      background: none;
+      border: none;
+      color: var(--dim);
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      padding: 14px 16px;
+      cursor: pointer;
+      position: relative;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      transition: color 0.15s;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .tab-trigger:hover { color: var(--text); }
+    .tab-trigger .tab-num {
+      color: var(--dim-2);
+      font-size: 0.7rem;
+      margin-right: 6px;
+    }
+    .tab-trigger.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-trigger.active .tab-num { color: var(--accent-dim); }
+    .tab-trigger .tab-badge {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 1px 6px;
+      border: 1px solid var(--line-2);
+      border-radius: 2px;
+      font-size: 0.62rem;
+      color: var(--dim);
+    }
+    .tab-trigger.active .tab-badge { border-color: var(--accent-dim); color: var(--accent); }
+
+    .tab-panel { display: none; animation: fadein 0.3s ease; }
+    .tab-panel.active { display: block; }
+    @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    /* ─── Section headings ────────────────────────────────────────────────── */
+    .h-section {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin: 24px 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+    .h-section::before { content: ''; width: 18px; height: 2px; background: var(--accent); margin-right: 8px; }
+    .h-section .h-meta { font-size: 0.7rem; color: var(--dim-2); letter-spacing: 0.05em; text-transform: none; }
+
+    /* ─── Metric grid (Overview tab) ──────────────────────────────────────── */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0;
+      border: 1px solid var(--line);
+      background: var(--bg-1);
+    }
+    .metric {
+      padding: 22px 24px 20px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      position: relative;
+      transition: background 0.15s;
+    }
+    .metric:hover { background: var(--bg-2); }
+    .metric:last-child { border-right: none; }
+    .metric-label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--dim);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .metric-label::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--accent);
+      display: inline-block;
+    }
+    .metric-value {
+      font-family: var(--mono);
+      font-size: 2.1rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+    .metric-value .metric-unit {
+      font-size: 0.85rem;
+      color: var(--dim);
+      font-weight: 400;
+      margin-left: 4px;
+    }
+    .metric-change {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--dim-2);
+      margin-top: 8px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ─── Two-column grid for sub/caller chips ────────────────────────────── */
+    .chip-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .chip {
+      border: 1px solid var(--line);
+      background: var(--bg-1);
+      padding: 14px 16px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .chip:hover { border-color: var(--line-3); background: var(--bg-2); }
+    .chip-name {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--text);
+      margin-bottom: 6px;
+      word-break: break-all;
+    }
+    .chip-meta {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--dim);
+    }
+    .chip-meta .num { color: var(--accent); font-weight: 600; }
+
+    /* ─── Subscription cards ──────────────────────────────────────────────── */
+    .auto-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 20px;
+      border: 1px solid var(--line);
+      background: var(--bg-1);
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .auto-banner .banner-text {
+      flex: 1 1 auto;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--dim);
+    }
+    .auto-banner .banner-text strong { color: var(--accent); font-weight: 600; }
+    .auto-banner code {
+      font-family: var(--mono);
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      padding: 2px 8px;
+      color: var(--text);
+      font-size: 0.78rem;
+    }
+
+    .subs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+      gap: 0;
+      border: 1px solid var(--line);
+    }
+    .subs-card {
+      background: var(--bg-1);
+      padding: 18px 20px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      position: relative;
+    }
+    .subs-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 2px;
+      background: var(--dim-2);
+    }
+    .subs-card.installed::before { background: var(--info); }
+    .subs-card.running::before { background: var(--ok); }
+    .subs-card.missing { opacity: 0.55; }
+    .subs-card.missing::before { background: var(--line-2); }
+
+    .subs-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .subs-label {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text);
+      flex: 1 1 auto;
+    }
+    .subs-state {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border: 1px solid var(--line-2);
+      color: var(--dim);
+      white-space: nowrap;
+    }
+    .subs-state.running { color: var(--accent); border-color: var(--accent-dim); }
+    .subs-state.installed { color: var(--info); border-color: rgba(37,99,235,0.24); }
+    .subs-state.missing { color: var(--dim-2); }
+    .subs-meta {
+      font-family: var(--mono);
+      font-size: 0.74rem;
+      color: var(--dim);
+      margin-bottom: 4px;
+    }
+    .subs-bridge-url, .subs-models {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--dim);
+      margin-top: 6px;
+      word-break: break-all;
+    }
+    .subs-bridge-url {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      padding: 6px 10px;
+      color: var(--text);
+    }
+    .subs-models { color: var(--dim); }
+    .subs-models::before { content: 'models: '; color: var(--dim-2); }
+    .subs-install-hint {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--warn);
+      background: rgba(180,83,9,0.08);
+      border: 1px solid rgba(180,83,9,0.22);
+      padding: 6px 10px;
+      margin-top: 8px;
+    }
+    .subs-install-hint code {
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 0;
+      color: var(--accent);
+    }
+
+    /* ─── Knowledge Graph ─────────────────────────────────────────────── */
+    .graph-wrap { background: var(--bg-1); border: 1px solid var(--line); padding: 12px; }
+    .graph-wrap svg { width: 100%; height: 460px; display: block; }
+    .graph-wrap svg .node { cursor: pointer; transition: transform 0.15s; }
+    .graph-wrap svg .node:hover { transform: scale(1.1); }
+    .graph-wrap svg .node-caller   { fill: var(--accent); }
+    .graph-wrap svg .node-fact-key   { fill: #2563eb; }
+    .graph-wrap svg .node-fact-value { fill: #a78bfa; }
+    .graph-wrap svg .edge { stroke: var(--line-2); stroke-opacity: 0.6; fill: none; }
+    .graph-wrap svg text.label { font-family: var(--mono); font-size: 10px; fill: var(--text); pointer-events: none; }
+    .graph-legend {
+      display: flex; gap: 18px; margin-top: 10px; padding: 6px 12px;
+      background: var(--bg); border: 1px solid var(--line);
+      font-family: var(--mono); font-size: 0.74rem; color: var(--dim);
+    }
+    .graph-legend .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: middle; }
+
+    /* ─── Leaderboard ─────────────────────────────────────────────────── */
+    .leaderboard-podium {
+      display: grid; grid-template-columns: 1fr 1.2fr 1fr;
+      gap: 12px; align-items: end; margin-bottom: 22px;
+    }
+    .podium-step {
+      padding: 18px 14px; border: 1px solid var(--line);
+      background: var(--bg-1); text-align: center;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .podium-step.gold   { background: #fefce8; border-color: #facc15; min-height: 200px; order: 2; }
+    .podium-step.silver { background: #f8fafc; border-color: #cbd5e1; min-height: 170px; order: 1; }
+    .podium-step.bronze { background: #fef3c7; border-color: #f59e0b; min-height: 150px; order: 3; }
+    .podium-rank { font-family: var(--mono); font-weight: 700; font-size: 1.4rem; color: var(--text); }
+    .podium-medal { font-size: 2.4rem; line-height: 1; }
+    .podium-model { font-family: var(--mono); font-weight: 600; font-size: 0.95rem; color: var(--text); word-break: break-all; }
+    .podium-stat  { font-family: var(--mono); font-size: 0.78rem; color: var(--dim); }
+    .leaderboard-table { background: var(--bg-1); border: 1px solid var(--line); }
+    .lb-row {
+      display: grid; grid-template-columns: 40px 1fr 80px 80px 80px 80px;
+      gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line);
+      font-family: var(--mono); font-size: 0.82rem; align-items: center;
+    }
+    .lb-row.head { background: var(--bg-2); color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.66rem; }
+    .lb-row:last-child { border-bottom: none; }
+    .lb-row .lb-pos { font-weight: 700; text-align: center; }
+    .lb-row .lb-num { text-align: right; }
+    .lb-row.medal-gold { background: rgba(250,204,21,0.06); }
+    .lb-row.medal-silver { background: rgba(203,213,225,0.10); }
+    .lb-row.medal-bronze { background: rgba(245,158,11,0.06); }
+
+    /* ─── Share + Report ──────────────────────────────────────────────── */
+    .share-controls {
+      display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+      padding: 14px; border: 1px solid var(--line); background: var(--bg-1);
+      margin-bottom: 12px;
+    }
+    .share-preview {
+      border: 1px solid var(--line); background: var(--bg-2);
+      padding: 12px; text-align: center;
+    }
+    .share-preview img { max-width: 100%; height: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+    .share-url {
+      font-family: var(--mono); font-size: 0.78rem; color: var(--dim);
+      padding: 8px 12px; background: var(--bg); border: 1px solid var(--line);
+      margin-top: 8px; word-break: break-all;
+    }
+    .share-hint { font-size: 0.82rem; color: var(--dim); margin-top: 8px; }
+    .share-hint code { font-family: var(--mono); background: var(--bg-2); padding: 2px 6px; border-radius: 2px; }
+
+    /* ─── Caller deep-dive modal additions ──────────────────────────── */
+    .caller-summary {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0; border: 1px solid var(--line); margin-bottom: 16px;
+    }
+    .caller-summary > div { padding: 10px 14px; border-right: 1px solid var(--line); }
+    .caller-summary > div:last-child { border-right: none; }
+    .caller-summary .label { font-size: 0.66rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; font-family: var(--mono); }
+    .caller-summary .val { font-family: var(--mono); font-size: 1rem; font-weight: 600; color: var(--text); margin-top: 4px; }
+    .caller-hour-bars { display: flex; gap: 2px; align-items: end; height: 60px; padding: 8px; border: 1px solid var(--line); background: var(--bg); }
+    .caller-hour-bars .bar { flex: 1; background: var(--accent); min-height: 1px; transition: height 0.2s; }
+    .caller-hour-axis { display: flex; gap: 2px; padding: 0 8px; font-family: var(--mono); font-size: 0.6rem; color: var(--dim-2); }
+    .caller-hour-axis > span { flex: 1; text-align: center; }
+
+    /* clickable caller chips */
+    .chip { cursor: pointer; }
+    .chip:hover { border-color: var(--accent); }
+
+    /* Layer breakdown under hero counter */
+    .hero-layer-breakdown {
+      display: flex; flex-direction: column; gap: 4px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+    .layer-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-family: var(--mono); font-size: 0.78rem;
+    }
+    .layer-name { color: var(--dim); }
+    .layer-val { color: var(--text); font-weight: 600; }
+
+    /* ─── Simple Mode CSS — hide non-configured cards ───────────────────── */
+    body.simple-mode .subs-card.missing { display: none; }
+    body.simple-mode #savingsAxes .axis[data-empty="true"] { display: none; }
+    body.hide-empty-providers .provider-item[data-status="unconfigured"] { display: none; }
+    body.hide-empty-providers .wallet-card[data-status="unknown"] { display: none; }
+
+    /* In Simple Mode, hide the noisy "5-axis" header explainer */
+    body.simple-mode .h-section .h-meta:contains('LLM Gateway') { display: none; }
+
+    /* ─── Hero (Buddy + Savings + Cost-VS) ───────────────────────────────── */
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.5fr 1.2fr;
+      gap: 0;
+      border: 1px solid var(--line);
+      background: var(--bg-1);
+      margin-bottom: 22px;
+      overflow: hidden;
+    }
+    .hero-grid > div { padding: 22px 24px; border-right: 1px solid var(--line); }
+    .hero-grid > div:last-child { border-right: none; }
+
+    .hero-eyebrow {
+      font-family: var(--mono);
+      font-size: 0.66rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-bottom: 12px;
+    }
+
+    /* Buddy */
+    .hero-buddy { display: flex; flex-direction: column; gap: 8px; }
+    .buddy-name { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+    .buddy-rarity {
+      display: inline-block; font-family: var(--mono); font-size: 0.62rem;
+      padding: 2px 8px; border: 1px solid var(--line-2); margin-left: 6px;
+      letter-spacing: 0.1em; text-transform: uppercase; vertical-align: middle;
+    }
+    .buddy-rarity.legendary { color: #b45309; border-color: #b45309; background: rgba(180,83,9,0.06); }
+    .buddy-rarity.epic      { color: #7c3aed; border-color: #7c3aed; background: rgba(124,58,237,0.06); }
+    .buddy-rarity.rare      { color: #2563eb; border-color: #2563eb; background: rgba(37,99,235,0.06); }
+    .buddy-rarity.uncommon  { color: var(--accent); border-color: var(--accent); background: rgba(15,118,110,0.06); }
+    .buddy-rarity.common    { color: var(--dim); }
+    .buddy-meta { font-family: var(--mono); font-size: 0.74rem; color: var(--dim); }
+    .buddy-art {
+      font-family: var(--mono); font-size: 0.8rem; line-height: 1.1;
+      white-space: pre; color: var(--accent);
+      padding: 8px; background: var(--bg);
+      border: 1px solid var(--line); margin: 4px 0;
+    }
+    .buddy-xp-bar {
+      height: 6px; background: var(--bg-3); border-radius: 1px;
+      position: relative; overflow: hidden;
+    }
+    .buddy-xp-fill {
+      height: 100%; background: linear-gradient(90deg, var(--accent), #2dd4bf);
+      transition: width 0.4s;
+    }
+    .buddy-xp-text {
+      font-family: var(--mono); font-size: 0.7rem; color: var(--dim-2);
+      display: flex; justify-content: space-between;
+    }
+    .buddy-speech {
+      font-style: italic; font-size: 0.84rem; color: var(--text);
+      padding: 8px 12px; background: var(--bg-2); border-left: 2px solid var(--accent);
+      margin-top: 6px;
+    }
+    .buddy-mood-happy::before    { content: '😊 '; }
+    .buddy-mood-content::before  { content: '😌 '; }
+    .buddy-mood-sleepy::before   { content: '😴 '; }
+    .buddy-mood-hungry::before   { content: '🍴 '; }
+    .buddy-mood-excited::before  { content: '🤩 '; }
+
+    /* Hero savings counter */
+    .hero-savings { display: flex; flex-direction: column; gap: 14px; }
+    .hero-counter {
+      font-family: var(--mono); font-size: 3.6rem; font-weight: 700;
+      color: var(--accent); letter-spacing: -0.03em; line-height: 0.95;
+    }
+    .hero-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .hero-pill {
+      flex: 1 1 100px; padding: 8px 12px; border: 1px solid var(--line);
+      background: var(--bg); display: flex; flex-direction: column; gap: 2px;
+    }
+    .hero-pill-label {
+      font-family: var(--mono); font-size: 0.62rem; color: var(--dim-2);
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .hero-pill-val { font-family: var(--mono); font-size: 1.05rem; font-weight: 600; color: var(--text); }
+
+    /* Cost-VS comparison */
+    .hero-cost { display: flex; flex-direction: column; gap: 10px; }
+    .cost-vs { display: flex; align-items: center; gap: 10px; }
+    .cost-side { flex: 1; padding: 10px 14px; border: 1px solid var(--line); }
+    .cost-side.without { background: rgba(180,35,24,0.04); border-color: rgba(180,35,24,0.2); }
+    .cost-side.with    { background: rgba(15,118,110,0.06); border-color: rgba(15,118,110,0.3); }
+    .cost-label {
+      font-family: var(--mono); font-size: 0.62rem; color: var(--dim-2);
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .cost-amount {
+      font-family: var(--mono); font-weight: 700; font-size: 1.6rem;
+      letter-spacing: -0.02em; margin-top: 2px;
+    }
+    .cost-side.without .cost-amount { color: var(--err); }
+    .cost-side.with .cost-amount    { color: var(--accent); }
+    .cost-arrow { color: var(--dim-2); font-size: 1.4rem; }
+    .cost-saved-line { font-size: 0.84rem; color: var(--text); }
+    .cost-saved-line strong { color: var(--accent); font-weight: 700; }
+
+    /* Savings axes (5-source breakdown) */
+    .savings-axes {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 0;
+      border: 1px solid var(--line); background: var(--bg-1);
+    }
+    .axis {
+      padding: 14px 16px; border-right: 1px solid var(--line);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .axis:last-child { border-right: none; }
+    .axis-label {
+      font-family: var(--mono); font-size: 0.66rem; color: var(--dim);
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .axis-icon { font-size: 1.2rem; }
+    .axis-cost {
+      font-family: var(--mono); font-weight: 700; font-size: 1.3rem;
+      color: var(--accent);
+    }
+    .axis-detail { font-family: var(--mono); font-size: 0.7rem; color: var(--dim-2); }
+
+    /* Two-column overview rows */
+    .overview-row-2col {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 28px;
+      margin-top: 22px;
+    }
+
+    /* Calendar heatmap */
+    .heatmap {
+      display: grid; grid-template-columns: repeat(53, 11px);
+      grid-auto-rows: 11px; gap: 2px;
+      padding: 12px; border: 1px solid var(--line); background: var(--bg-1);
+    }
+    .heatmap-cell { width: 11px; height: 11px; border-radius: 2px; background: var(--bg-3); cursor: pointer; transition: transform 0.1s; }
+    .heatmap-cell:hover { transform: scale(1.4); outline: 1px solid var(--accent); }
+    .heatmap-cell.l1 { background: #2dd4bf40; }
+    .heatmap-cell.l2 { background: #2dd4bf80; }
+    .heatmap-cell.l3 { background: #2dd4bfc0; }
+    .heatmap-cell.l4 { background: var(--accent); }
+
+    /* Forecast */
+    .forecast { padding: 18px; border: 1px solid var(--line); background: var(--bg-1); }
+    .forecast-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 8px 0; border-bottom: 1px solid var(--line);
+    }
+    .forecast-row:last-child { border-bottom: none; }
+    .forecast-window { font-family: var(--mono); font-size: 0.72rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; }
+    .forecast-amount { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 1.1rem; }
+    .forecast-trend {
+      font-family: var(--mono); font-size: 0.78rem; padding-top: 8px;
+      color: var(--dim);
+    }
+    .forecast-trend.up { color: var(--accent); }
+    .forecast-trend.down { color: var(--err); }
+    .forecast-trend::before { content: '→ '; }
+    .forecast-trend.up::before { content: '↗ '; }
+    .forecast-trend.down::before { content: '↘ '; }
+
+    /* Live events feed */
+    .events-feed {
+      max-height: 380px; overflow-y: auto;
+      border: 1px solid var(--line); background: var(--bg-1);
+      font-family: var(--mono);
+    }
+    .event-row {
+      display: grid; grid-template-columns: auto 1fr auto; gap: 10px;
+      padding: 8px 14px; border-bottom: 1px solid var(--line);
+      font-size: 0.78rem; align-items: center;
+    }
+    .event-row:last-child { border-bottom: none; }
+    .event-row:hover { background: var(--bg-2); }
+    .event-icon { font-size: 1rem; }
+    .event-body { color: var(--text); }
+    .event-caller { color: var(--accent); font-weight: 600; }
+    .event-detail { color: var(--dim); margin-top: 2px; font-size: 0.7rem; }
+    .event-time { color: var(--dim-2); font-size: 0.68rem; }
+
+    /* Achievements */
+    .achievements-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .achievement {
+      padding: 12px 14px; border: 1px solid var(--line); background: var(--bg-1);
+      display: flex; gap: 12px; align-items: flex-start;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .achievement.unlocked { border-color: var(--accent); }
+    .achievement.unlocked:hover { transform: translateY(-2px); }
+    .achievement.locked { opacity: 0.45; filter: grayscale(0.8); }
+    .ach-icon { font-size: 1.6rem; line-height: 1; }
+    .ach-info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .ach-title { font-weight: 600; font-size: 0.88rem; color: var(--text); }
+    .ach-desc { font-size: 0.74rem; color: var(--dim); font-family: var(--mono); }
+
+    /* Streak badge */
+    #streakBadge { color: var(--accent); font-weight: 700; }
+
+    @media (max-width: 1100px) {
+      .hero-grid { grid-template-columns: 1fr; }
+      .hero-grid > div { border-right: none; border-bottom: 1px solid var(--line); }
+      .savings-axes { grid-template-columns: repeat(2, 1fr); }
+      .axis { border-bottom: 1px solid var(--line); }
+      .overview-row-2col { grid-template-columns: 1fr; }
+      .heatmap { grid-template-columns: repeat(26, 11px); }
+    }
+
+    /* ─── Savings ───────────────────────────────────────────────────────── */
+    .savings-hero {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: 0;
+      border: 1px solid var(--line);
+      background: var(--bg-1);
+    }
+    .savings-headline {
+      padding: 28px 32px;
+      border-right: 1px solid var(--line);
+    }
+    .savings-eyebrow {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--dim);
+      margin-bottom: 10px;
+    }
+    .savings-counter {
+      font-family: var(--mono);
+      font-size: 3.4rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      color: var(--accent);
+      transition: color 0.4s;
+    }
+    .savings-sub {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--dim);
+      margin-top: 14px;
+    }
+    .savings-spark {
+      padding: 24px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .savings-spark svg {
+      width: 100%;
+      height: 80px;
+    }
+    .savings-spark svg path.area { fill: rgba(15,118,110,0.10); stroke: none; }
+    .savings-spark svg path.line { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+    .savings-spark svg circle.last { fill: var(--accent); }
+    .savings-spark-meta {
+      display: flex; justify-content: space-between;
+      font-family: var(--mono); font-size: 0.7rem;
+      color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .savings-spark-meta #savingsHitRate { color: var(--accent); }
+
+    /* ─── Wallet ───────────────────────────────────────────────────────── */
+    .wallet-banner {
+      padding: 14px 18px;
+      border: 1px solid var(--line);
+      background: var(--bg-1);
+      margin-bottom: 18px;
+      font-size: 0.86rem;
+      color: var(--dim);
+    }
+    .wallet-banner strong { color: var(--accent); font-weight: 600; }
+    .wallet-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 0;
+      border: 1px solid var(--line);
+    }
+    .wallet-card {
+      background: var(--bg-1);
+      padding: 18px 20px 16px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      position: relative;
+    }
+    .wallet-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .wallet-label {
+      font-weight: 600; font-size: 0.95rem; color: var(--text);
+    }
+    .wallet-rec {
+      font-family: var(--mono); font-size: 0.65rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 2px 8px; border: 1px solid var(--line-2);
+      color: var(--dim);
+    }
+    .wallet-rec.use-this { color: var(--ok); border-color: rgba(21,128,61,0.4); background: rgba(21,128,61,0.05); }
+    .wallet-rec.available { color: var(--info); border-color: rgba(37,99,235,0.4); }
+    .wallet-rec.near-limit { color: var(--warn); border-color: rgba(180,83,9,0.4); background: rgba(180,83,9,0.05); }
+    .wallet-rec.exhausted { color: var(--err); border-color: rgba(180,35,24,0.4); background: rgba(180,35,24,0.05); }
+    .wallet-rec.unknown { color: var(--dim-2); }
+
+    .wallet-bar {
+      height: 8px;
+      background: var(--bg-2);
+      border-radius: 1px;
+      position: relative;
+      overflow: hidden;
+      margin: 12px 0 10px;
+    }
+    .wallet-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.4s ease;
+    }
+    .wallet-bar-fill.warn { background: var(--warn); }
+    .wallet-bar-fill.err { background: var(--err); }
+    .wallet-meta {
+      display: flex; justify-content: space-between;
+      font-family: var(--mono); font-size: 0.74rem;
+      color: var(--dim);
+    }
+    .wallet-meta strong { color: var(--text); font-weight: 600; }
+    .wallet-reset {
+      font-family: var(--mono); font-size: 0.7rem;
+      color: var(--dim-2); margin-top: 6px;
+    }
+
+    /* ─── Memory ───────────────────────────────────────────────────────── */
+    .memory-form {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px;
+      align-items: center;
+    }
+    .mem-list {
+      border: 1px solid var(--line);
+      background: var(--bg-1);
+    }
+    .mem-row {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: 1.2fr 2fr 1fr;
+      gap: 12px;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+    }
+    .mem-row:last-child { border-bottom: none; }
+    .mem-key { font-weight: 600; color: var(--accent); }
+    .mem-val { color: var(--text); }
+    .mem-meta { color: var(--dim-2); font-size: 0.72rem; text-align: right; }
+
+    /* ─── Providers ──────────────────────────────────────────────────────── */
+    .providers-stack > section { margin-bottom: 22px; }
+    .providers-stack > section:last-child { margin-bottom: 0; }
+    .providers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 0;
+      border: 1px solid var(--line);
+    }
+    .provider-item {
+      background: var(--bg-1);
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 16px;
+    }
+    .provider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .provider-name { font-weight: 600; color: var(--text); font-size: 0.9rem; }
+    .provider-tech-name {
+      font-family: var(--mono); font-size: 0.7rem; color: var(--dim-2);
+      margin-bottom: 6px;
+    }
+    .provider-tag {
+      font-family: var(--mono); font-size: 0.62rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 2px 8px;
+      border: 1px solid var(--line-2);
+      color: var(--dim);
+      white-space: nowrap;
+    }
+    .provider-tag.tag-configured { color: var(--ok); border-color: rgba(21,128,61,0.24); }
+    .provider-tag.tag-unconfigured { color: var(--dim); }
+    .provider-runtime {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--dim-2);
+      margin-top: 8px;
+      min-height: 18px;
+    }
+    .provider-runtime .runtime-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--dim-2);
+      flex: 0 0 auto;
+    }
+    .provider-runtime.runtime-ready { color: var(--ok); }
+    .provider-runtime.runtime-ready .runtime-dot { background: var(--ok); box-shadow: 0 0 0 3px rgba(21,128,61,0.12); }
+    .provider-runtime.runtime-warn { color: var(--warn); }
+    .provider-runtime.runtime-warn .runtime-dot { background: var(--warn); box-shadow: 0 0 0 3px rgba(180,83,9,0.12); }
+    .provider-runtime.runtime-muted { color: var(--dim); }
+    .provider-runtime.runtime-muted .runtime-dot { background: var(--dim); }
+    .provider-models {
+      font-family: var(--mono); font-size: 0.72rem; color: var(--dim);
+      margin-top: 4px; word-break: break-all;
+    }
+    .provider-rate {
+      font-family: var(--mono); font-size: 0.68rem; color: var(--dim-2);
+      margin-top: 4px;
+    }
+    .provider-env-hint {
+      font-family: var(--mono); font-size: 0.68rem;
+      color: var(--warn);
+      background: rgba(180,83,9,0.08);
+      border: 1px solid rgba(180,83,9,0.22);
+      padding: 4px 8px;
+      margin-top: 6px;
+    }
+    .provider-env-hint code { background: var(--bg); padding: 1px 4px; color: var(--accent); }
+
+    /* ─── Activity / Requests table ───────────────────────────────────────── */
+    .filters {
+      display: flex; gap: 4px;
+      margin-bottom: 14px;
+      font-family: var(--mono);
+    }
+    .filter-btn {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--dim);
+      padding: 6px 16px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-btn:hover { color: var(--text); border-color: var(--line-3); }
+    .filter-btn.active {
+      color: var(--accent);
+      border-color: var(--accent-dim);
+      background: rgba(15,118,110,0.08);
+    }
+
+    .req-table {
+      border: 1px solid var(--line);
+      background: var(--bg-1);
+      font-family: var(--mono);
+      font-size: 0.78rem;
+    }
+    .req-row {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr 1.2fr 0.7fr 0.7fr 0.7fr 0.65fr 0.9fr 0.75fr 0.7fr;
+      gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      align-items: center;
+    }
+    .req-row.head {
+      background: var(--bg-2);
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-size: 0.66rem;
+    }
+    .req-row:last-child { border-bottom: none; }
+    .req-row.body:hover { background: var(--bg-2); }
+    .req-row > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .req-status {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid var(--line-2);
+    }
+    .req-status.approved { color: var(--ok); border-color: rgba(21,128,61,0.24); }
+    .req-status.error, .req-status.rejected { color: var(--err); border-color: rgba(180,35,24,0.24); }
+    .req-status.warning, .req-status.pending_review { color: var(--warn); border-color: rgba(180,83,9,0.24); }
+
+    .client-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .client-item {
+      border: 1px solid var(--line);
+      background: var(--bg-1);
+      padding: 12px 14px;
+      font-family: var(--mono);
+      min-height: 88px;
+    }
+    .client-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 9px;
+    }
+    .client-name {
+      font-weight: 700;
+      color: var(--text);
+      font-size: 0.78rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .client-state {
+      border: 1px solid var(--line-2);
+      padding: 2px 7px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.62rem;
+      color: var(--dim);
+      white-space: nowrap;
+    }
+    .client-state.live {
+      color: var(--ok);
+      border-color: rgba(21,128,61,0.28);
+      background: rgba(21,128,61,0.06);
+    }
+    .client-state.not-connected {
+      color: var(--warn);
+      border-color: rgba(180,83,9,0.26);
+      background: rgba(180,83,9,0.06);
+    }
+    .client-meta {
+      color: var(--dim);
+      font-size: 0.72rem;
+      line-height: 1.55;
+    }
+    .client-meta strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--dim-2);
+      font-family: var(--mono);
+      font-size: 0.85rem;
+    }
+    .loading {
+      padding: 30px 20px;
+      text-align: center;
+      color: var(--dim);
+      font-family: var(--mono);
+      font-size: 0.8rem;
+    }
+
+    /* ─── Discover Panel ──────────────────────────────────────────────── */
+    .discover-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px; margin-bottom: 16px;
+    }
+    .discover-card {
+      border: 1px solid var(--line-2);
+      border-radius: 10px;
+      padding: 12px 14px;
+      background: var(--surface-1, rgba(255,255,255,0.02));
+    }
+    .discover-card-title {
+      font-size: 0.72rem; color: var(--text-muted, #888);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .discover-card-stat {
+      font-family: var(--mono); font-size: 1.4rem;
+      color: var(--accent); margin-bottom: 8px;
+    }
+    .discover-card-list {
+      list-style: none; padding: 0; margin: 0;
+      font-size: 0.78rem; font-family: var(--mono);
+    }
+    .discover-card-list li {
+      padding: 4px 0;
+      border-top: 1px solid var(--line-1, rgba(255,255,255,0.05));
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .discover-card-list li:first-child { border-top: none; }
+    .discover-card-list .disc-ok { color: var(--accent); }
+    .discover-card-list .disc-no { color: var(--text-muted, #888); opacity: 0.6; }
+
+    /* ─── API Tab ──────────────────────────────────────────────────────── */
+    .api-card {
+      border: 1px solid var(--line-2);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      background: var(--surface-1, rgba(255,255,255,0.02));
+    }
+    .api-card-head {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .api-method {
+      font-family: var(--mono); font-size: 0.7rem; font-weight: 700;
+      padding: 3px 8px; border-radius: 4px;
+      background: var(--accent); color: #fff; letter-spacing: 0.05em;
+    }
+    .api-path {
+      font-family: var(--mono); font-size: 0.92rem;
+      color: var(--text);
+    }
+    .api-tag {
+      font-size: 0.72rem; color: var(--text-muted, #888);
+      font-style: italic; flex: 1;
+    }
+    .api-snippet {
+      font-family: var(--mono); font-size: 0.8rem;
+      background: var(--surface-2, rgba(0,0,0,0.25));
+      border: 1px solid var(--line-1, rgba(255,255,255,0.05));
+      padding: 12px 14px; border-radius: 6px;
+      overflow-x: auto; white-space: pre;
+      color: var(--text); margin: 0;
+    }
+    .api-snippet code { background: transparent; padding: 0; }
+    .api-copy { padding: 4px 12px; font-size: 0.7rem; }
+
+    .api-tryout {
+      border: 1px solid var(--line-2);
+      border-radius: 10px;
+      padding: 14px 16px;
+      background: var(--surface-1, rgba(255,255,255,0.02));
+    }
+    .api-tryout-row { display: flex; flex-wrap: wrap; align-items: center; }
+
+    .api-bridge-table-wrap { overflow-x: auto; border: 1px solid var(--line-2); border-radius: 10px; }
+    .api-bridge-table {
+      width: 100%; border-collapse: collapse; font-size: 0.85rem;
+    }
+    .api-bridge-table th, .api-bridge-table td {
+      padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line-1, rgba(255,255,255,0.05));
+    }
+    .api-bridge-table th {
+      font-weight: 600; color: var(--text-muted, #888);
+      text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.72rem;
+    }
+    .api-bridge-table tr:last-child td { border-bottom: none; }
+    .api-bridge-status { font-family: var(--mono); font-size: 0.78rem; }
+    .api-bridge-status.ok { color: var(--accent); }
+    .api-bridge-status.err { color: #e34; }
+
+    /* ─── Buttons ────────────────────────────────────────────────────────── */
+    .btn {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      padding: 8px 18px;
+      border: 1px solid var(--line-2);
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: all 0.15s;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(15,118,110,0.06);
+    }
+    .btn.primary {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(15,118,110,0.08);
+    }
+    .btn.primary:hover { background: var(--accent); color: #ffffff; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-sm { padding: 5px 12px; font-size: 0.72rem; }
+
+    /* ─── Settings modal ─────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(56,68,82,0.28);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      z-index: 1000;
+      overflow-y: auto;
+      padding: 40px 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg-1);
+      border: 1px solid var(--line-2);
+      max-width: 760px;
+      width: 100%;
+      max-height: calc(100vh - 80px);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 60px rgba(75,91,108,0.20);
+    }
+    .modal-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-header h2 {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .modal-header h2::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 9px; background: var(--accent); }
+    .modal-close {
+      background: none;
+      border: 1px solid var(--line-2);
+      width: 32px; height: 32px;
+      cursor: pointer;
+      color: var(--dim);
+      font-size: 1.1rem;
+      line-height: 1;
+      transition: all 0.15s;
+    }
+    .modal-close:hover { color: var(--err); border-color: var(--err); }
+    .modal-body { padding: 22px 24px; overflow-y: auto; flex: 1 1 auto; }
+    .modal-footer {
+      padding: 14px 24px;
+      border-top: 1px solid var(--line);
+      display: flex; gap: 10px; justify-content: flex-end; align-items: center;
+    }
+    .modal-footer .save-status {
+      margin-right: auto;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--dim);
+    }
+    .modal-footer .save-status.ok { color: var(--ok); }
+    .modal-footer .save-status.err { color: var(--err); }
+
+    .settings-section { margin-bottom: 26px; }
+    .settings-section:last-child { margin-bottom: 0; }
+    .settings-section-title {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 6px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--line);
+    }
+    .settings-section-title::before { content: ''; display: inline-block; width: 14px; height: 2px; margin-right: 8px; background: var(--accent-dim); vertical-align: middle; }
+    .settings-section-desc { font-size: 0.78rem; color: var(--dim); margin-bottom: 10px; }
+
+    .settings-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .settings-row:last-child { border-bottom: none; }
+    .settings-row-info { display: flex; flex-direction: column; gap: 2px; }
+    .settings-row-label { font-weight: 600; font-size: 0.88rem; color: var(--text); }
+    .settings-row-meta {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--dim);
+    }
+
+    .settings-toggle { position: relative; width: 42px; height: 22px; flex-shrink: 0; }
+    .settings-toggle input { opacity: 0; width: 0; height: 0; }
+    .settings-toggle .slider {
+      position: absolute; cursor: pointer;
+      inset: 0;
+      background: var(--bg-3);
+      border: 1px solid var(--line-2);
+      transition: 0.2s;
+    }
+    .settings-toggle .slider::before {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      left: 3px; top: 50%; transform: translateY(-50%);
+      background: var(--dim);
+      transition: 0.2s;
+    }
+    .settings-toggle input:checked + .slider {
+      border-color: var(--accent-dim);
+      background: rgba(15,118,110,0.10);
+    }
+    .settings-toggle input:checked + .slider::before {
+      transform: translate(20px, -50%);
+      background: var(--accent);
+      box-shadow: none;
+    }
+
+    .settings-input {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--bg);
+      border: 1px solid var(--line-2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      margin-top: 6px;
+    }
+    .settings-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(15,118,110,0.16);
+    }
+
+    .settings-radio-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .settings-radio {
+      flex: 1 1 calc(50% - 4px);
+      min-width: 140px;
+      padding: 10px 14px;
+      border: 1px solid var(--line-2);
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-family: var(--mono);
+      text-align: center;
+      transition: all 0.15s;
+      color: var(--dim);
+    }
+    .settings-radio:hover { color: var(--text); border-color: var(--line-3); }
+    .settings-radio.active {
+      border-color: var(--accent);
+      background: rgba(15,118,110,0.08);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .settings-radio input { display: none; }
+
+    /* ─── Floating connection indicator ──────────────────────────────────── */
+    .conn-pill {
+      position: fixed;
+      bottom: 16px; right: 16px;
+      padding: 6px 14px;
+      background: var(--bg-1);
+      border: 1px solid var(--line-2);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 50;
+    }
+    .conn-pill .dot {
+      width: 6px; height: 6px;
+      background: var(--ok);
+      box-shadow: 0 0 0 3px rgba(21,128,61,0.10);
+      animation: pulse 2.4s infinite;
+    }
+
+    /* ─── Responsive ─────────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .shell { padding: 16px 18px 60px; }
+      .topbar { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .metric { padding: 16px 18px; }
+      .metric-value { font-size: 1.7rem; }
+      .req-row { grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px; font-size: 0.72rem; }
+      .req-row.head { display: none; }
+      .req-row > div:nth-child(n+5) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+
+    <!-- ─── Top bar ──────────────────────────────────────────────────────── -->
+    <div class="topbar">
+      <div class="brand">
+        <span class="brand-mark">llm.gateway</span>
+        <span class="brand-tag">gateway workbench · v1.0</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-sm" id="settingsBtn" type="button" title="Configure subscriptions and API keys">
+          ⚙ settings
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── Status strip ─────────────────────────────────────────────────── -->
+    <div class="status-strip">
+      <div class="status-cell">
+        <span class="dot ok" id="dbStatusIndicator"></span>
+        <span class="label">db</span>
+        <span class="val" id="dbStatus">connecting</span>
+      </div>
+      <div class="status-cell">
+        <span class="dot ok" id="pollingStatusIndicator"></span>
+        <span class="label">poll</span>
+        <span class="val" id="pollingStatus">starting</span>
+      </div>
+      <div class="status-cell">
+        <span class="label">interval</span>
+        <span class="val" id="pollInterval">3s</span>
+      </div>
+      <div class="status-cell">
+        <span class="label">mode</span>
+        <span class="val" id="routingModeBadge">auto</span>
+      </div>
+    </div>
+
+    <!-- ─── Tab bar ──────────────────────────────────────────────────────── -->
+    <nav class="tabs" role="tablist">
+      <button class="tab-trigger active" data-tab="overview" role="tab" title="Headline stats: tokens saved, cost, buddy, achievements"><span class="tab-num">01</span>overview</button>
+      <button class="tab-trigger" data-tab="subscriptions" role="tab" title="Your CLI subscriptions (Claude Code, Codex, …) and their bridge status"><span class="tab-num">02</span>subscriptions <span class="tab-badge" id="subsTabBadge">·</span></button>
+      <button class="tab-trigger" data-tab="providers" role="tab" title="All configured LLM providers (local Ollama, paid APIs, free tiers) — advanced"><span class="tab-num">03</span>providers <span class="tab-badge" id="providersTabBadge">·</span></button>
+      <button class="tab-trigger" data-tab="activity" role="tab" title="Live request log — every call that went through the gateway"><span class="tab-num">04</span>activity</button>
+      <button class="tab-trigger" data-tab="savings" role="tab" title="Cost & token savings counter — main 'wow how much I saved' page"><span class="tab-num">05</span>savings <span class="tab-badge" id="savingsTabBadge">·</span></button>
+      <button class="tab-trigger" data-tab="wallet" role="tab" title="Subscription quotas — how much of each Pro plan you've used in the current window"><span class="tab-num">06</span>wallet <span class="tab-badge" id="walletTabBadge">·</span></button>
+      <button class="tab-trigger" data-tab="memory" role="tab" title="Persistent facts the gateway knows about each caller — auto-injected into prompts"><span class="tab-num">07</span>memory</button>
+      <button class="tab-trigger" data-tab="leaderboard" role="tab" title="Race-mode results — fastest model leaderboard if you ran multi-model races"><span class="tab-num">08</span>races <span class="tab-badge" id="leaderboardTabBadge">·</span></button>
+      <button class="tab-trigger" data-tab="share" role="tab" title="Generate an embeddable SVG card showing your savings (for blog/Twitter/README)"><span class="tab-num">09</span>share</button>
+      <button class="tab-trigger" data-tab="report" role="tab" title="Generate a printable monthly PDF report"><span class="tab-num">10</span>report</button>
+      <button class="tab-trigger" data-tab="api" role="tab" title="API reference — copy-paste curl/SDK examples for OpenAI-compat, Anthropic-compat, native"><span class="tab-num">11</span>api</button>
+    </nav>
+
+    <!-- ─── Tab: Overview ────────────────────────────────────────────────── -->
+    <section class="tab-panel active" data-tab="overview">
+
+      <!-- ─── Hero: Buddy + Headline Savings + Forecast ──────────────────── -->
+      <div class="hero-grid">
+        <!-- Left: Pet/Buddy -->
+        <div class="hero-buddy" id="heroBuddy">
+          <div class="loading">summoning buddy</div>
+        </div>
+
+        <!-- Center: Headline savings counter — combined all layers -->
+        <div class="hero-savings">
+          <div class="hero-eyebrow">total tokens saved · all layers · all-time</div>
+          <div class="hero-counter"><span id="heroTokensSavedCombined">0</span><span style="font-size:1.1rem;color:var(--dim);font-weight:400;margin-left:8px;">tokens</span></div>
+          <div class="hero-layer-breakdown" id="heroLayerBreakdown">
+            <div class="layer-row"><span class="layer-name">⚡ Gateway (LLM calls)</span><span class="layer-val" id="heroTokensSaved">0</span></div>
+            <div class="layer-row" id="heroExternalToolRow" style="display:none;"><span class="layer-name">🗜 External tool compression (legacy)</span><span class="layer-val" id="heroExternalToolTokens">—</span></div>
+          </div>
+          <div class="hero-row">
+            <div class="hero-pill">
+              <span class="hero-pill-label">cost saved</span>
+              <span class="hero-pill-val" id="heroCostSaved">$0.00</span>
+            </div>
+            <div class="hero-pill">
+              <span class="hero-pill-label">cache hits</span>
+              <span class="hero-pill-val" id="heroCacheHits">0</span>
+            </div>
+            <div class="hero-pill">
+              <span class="hero-pill-label">savings rate</span>
+              <span class="hero-pill-val" id="heroSavingsRate">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Cost analysis (without vs with) — competitor comparison -->
+        <div class="hero-cost">
+          <div class="hero-eyebrow">cost analysis · last 24h · USD</div>
+          <div class="cost-vs">
+            <div class="cost-side without">
+              <div class="cost-label">without gateway</div>
+              <div class="cost-amount" id="costWithout">$0.00</div>
+            </div>
+            <div class="cost-arrow">→</div>
+            <div class="cost-side with">
+              <div class="cost-label">with gateway</div>
+              <div class="cost-amount" id="costWith">$0.00</div>
+            </div>
+          </div>
+          <div class="cost-saved-line">you saved <strong id="costSavedLine">$0.00</strong> · <span id="costSavedPercent">0%</span> reduction</div>
+        </div>
+      </div>
+
+      <!-- ─── Five-Axis Savings Breakdown — full savings breakdown ── -->
+      <h2 class="h-section">Savings Sources <span class="h-meta">5 measurement axes across all calls</span></h2>
+      <div class="savings-axes" id="savingsAxes">
+        <div class="loading">loading</div>
+      </div>
+
+      <!-- ─── Quick Metrics Grid ──────────────────────────────────────────── -->
+      <h2 class="h-section">Live Metrics <span class="h-meta">last 24h</span></h2>
+      <div class="metric-grid">
+        <div class="metric">
+          <div class="metric-label">requests</div>
+          <div class="metric-value" id="totalRequests">0</div>
+          <div class="metric-change" id="requestsChange">routed</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">success rate</div>
+          <div class="metric-value" id="successRate">0<span class="metric-unit">%</span></div>
+          <div class="metric-change" id="successChange">approved/total</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">avg latency</div>
+          <div class="metric-value" id="avgLatency">0<span class="metric-unit">ms</span></div>
+          <div class="metric-change" id="latencyChange">end-to-end</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">spent today</div>
+          <div class="metric-value" id="totalCost">$0.00</div>
+          <div class="metric-change" id="costChange">actual usd</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">confidence</div>
+          <div class="metric-value" id="avgConfidence">0<span class="metric-unit">/10</span></div>
+          <div class="metric-change" id="confidenceChange">post-val</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">fallback usage</div>
+          <div class="metric-value" id="fallbackPercent">0<span class="metric-unit">%</span></div>
+          <div class="metric-change" id="fallbackChange">primary→fallback</div>
+        </div>
+      </div>
+
+      <!-- ─── Calendar heatmap (GitHub style) + Forecast ──────────────────── -->
+      <div class="overview-row-2col">
+        <div>
+          <h2 class="h-section">Activity · last 365 days <span class="h-meta">streak <span id="streakBadge">0</span>d</span></h2>
+          <div class="heatmap" id="heatmap"><div class="loading">loading activity</div></div>
+        </div>
+        <div>
+          <h2 class="h-section">Forecast <span class="h-meta">based on recent trend</span></h2>
+          <div class="forecast" id="forecast"><div class="loading">computing forecast</div></div>
+        </div>
+      </div>
+
+      <!-- ─── Live Events Feed + Top Models / Callers ─────────────────────── -->
+      <div class="overview-row-2col">
+        <div>
+          <h2 class="h-section">Live Activity <span class="h-meta">most recent first</span></h2>
+          <div class="events-feed" id="eventsFeed"><div class="loading">listening</div></div>
+        </div>
+        <div>
+          <h2 class="h-section">Top Models <span class="h-meta">last 24h</span></h2>
+          <div class="chip-grid" id="topModels"><div class="loading">analyzing routing</div></div>
+
+          <h2 class="h-section" style="margin-top: 18px;">Top Callers</h2>
+          <div class="chip-grid" id="topCallers"><div class="loading">analyzing callers</div></div>
+        </div>
+      </div>
+
+      <!-- ─── Achievements ──────────────────────────────────────────────────── -->
+      <h2 class="h-section">Achievements <span class="h-meta"><span id="achievementsProgress">0/0</span></span></h2>
+      <div class="achievements-grid" id="achievementsGrid"><div class="loading">checking quests</div></div>
+    </section>
+
+    <!-- ─── Tab: Subscriptions ──────────────────────────────────────────── -->
+    <section class="tab-panel" data-tab="subscriptions">
+      <div class="auto-banner">
+        <div class="banner-text">
+          <strong>auto-gateway</strong> <span id="subsAutoState">detection only</span>
+          — installed CLI subscriptions are wrapped into HTTP bridges and exposed via <code>/v1/chat/completions</code>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm" id="discoverFullBtn" type="button" title="Full-system scan: CLIs + local LLMs + API keys, then auto-spawn any detected bridges">⚡ discover & connect all</button>
+          <button class="btn btn-sm primary" id="subsSpawnBtn" type="button">⟳ spawn missing bridges</button>
+        </div>
+      </div>
+
+      <!-- ── Full discovery report (populated by discover button) ────────── -->
+      <div id="discoverReportWrap" style="display: none; margin-bottom: 14px;">
+        <h2 class="h-section">Discovery Report <span class="h-meta" id="discoverReportMeta">—</span></h2>
+        <div class="discover-grid">
+          <div class="discover-card">
+            <div class="discover-card-title">CLI Subscriptions</div>
+            <div class="discover-card-stat"><span id="discCntSubs">0</span> detected</div>
+            <ul class="discover-card-list" id="discListSubs"></ul>
+          </div>
+          <div class="discover-card">
+            <div class="discover-card-title">Local LLM Servers</div>
+            <div class="discover-card-stat"><span id="discCntLocal">0</span> running</div>
+            <ul class="discover-card-list" id="discListLocal"></ul>
+          </div>
+          <div class="discover-card">
+            <div class="discover-card-title">API-Key Providers</div>
+            <div class="discover-card-stat"><span id="discCntKeys">0</span> configured</div>
+            <ul class="discover-card-list" id="discListKeys"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="subs-grid" id="subscriptionsList">
+        <div class="loading">discovering installed subscriptions</div>
+      </div>
+    </section>
+
+    <!-- ─── Tab: Providers ──────────────────────────────────────────────── -->
+    <section class="tab-panel" data-tab="providers">
+      <div class="providers-stack">
+        <section>
+          <h2 class="h-section">Local <span class="h-meta">on-host inference</span></h2>
+          <div class="providers-grid" id="providersList_local">
+            <div class="loading">enumerating local models</div>
+          </div>
+        </section>
+        <section>
+          <h2 class="h-section">Subscription <span class="h-meta">paid plans via bridges</span></h2>
+          <div class="providers-grid" id="providersList_subscription">
+            <div class="loading">enumerating subscription providers</div>
+          </div>
+        </section>
+        <section>
+          <h2 class="h-section">Free Tier <span class="h-meta">api-key authenticated</span></h2>
+          <div class="providers-grid" id="providersList_free">
+            <div class="loading">enumerating free-tier endpoints</div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ─── Tab: Activity ──────────────────────────────────────────────── -->
+    <section class="tab-panel" data-tab="activity">
+      <h2 class="h-section">Desktop AI Coverage <span class="h-meta">only gateway traffic is counted</span></h2>
+      <div class="client-grid" id="clientsCoverage">
+        <div class="loading">checking connected clients</div>
+      </div>
+      <h2 class="h-section">Recent Requests <span class="h-meta">live polling</span></h2>
+      <div class="filters">
+        <button class="filter-btn active" data-hours="24">last 24h</button>
+        <button class="filter-btn" data-hours="168">last 7d</button>
+        <button class="filter-btn" data-hours="720">last 30d</button>
+      </div>
+      <div class="req-table">
+        <div class="req-row head">
+          <div>request id</div>
+          <div>caller</div>
+          <div>model</div>
+          <div>status</div>
+          <div>ctx before</div>
+          <div>ctx sent</div>
+          <div>saved</div>
+          <div>compression</div>
+          <div>cost</div>
+          <div>latency</div>
+        </div>
+        <div id="requestsTable">
+          <div class="empty-state">no requests yet</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Tab: Savings ─────────────────────────────────────────────────── -->
+    <section class="tab-panel" data-tab="savings">
+      <div class="savings-hero">
+        <div class="savings-headline">
+          <div class="savings-eyebrow">cumulative savings · last 24h</div>
+          <div class="savings-counter" id="savingsCounter">$0.00</div>
+          <div class="savings-sub" id="savingsSubLine">— · — tokens prevented · — cache hits</div>
+        </div>
+        <div class="savings-spark">
+          <svg id="savingsSparkline" viewBox="0 0 320 64" preserveAspectRatio="none"></svg>
+          <div class="savings-spark-meta">
+            <span id="savingsSparkLabel">$ saved per hour</span>
+            <span id="savingsHitRate">hit rate —</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="metric-grid" style="margin-top:18px;">
+        <div class="metric">
+          <div class="metric-label">cache entries</div>
+          <div class="metric-value" id="cacheEntries">0</div>
+          <div class="metric-change">distinct cached responses</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">tokens prevented</div>
+          <div class="metric-value" id="tokensPrevented">0</div>
+          <div class="metric-change">never sent to LLM</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">cache hit rate</div>
+          <div class="metric-value" id="cacheHitRate">0<span class="metric-unit">%</span></div>
+          <div class="metric-change">hits ÷ total req</div>
+        </div>
+      </div>
+
+      <h2 class="h-section">Top Caching Callers <span class="h-meta">most savings</span></h2>
+      <div class="chip-grid" id="topSavingCallers">
+        <div class="loading">loading</div>
+      </div>
+
+      <h2 class="h-section">Cache Controls <span class="h-meta">manual invalidation</span></h2>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <input id="cacheClearCaller" class="settings-input" style="max-width:280px;" placeholder="caller id (e.g. cursor)">
+        <button class="btn" id="cacheClearBtn" type="button">clear caller's cache</button>
+        <button class="btn" id="cachePruneBtn" type="button">prune entries &gt; 7 days</button>
+      </div>
+    </section>
+
+    <!-- ─── Tab: Wallet (Subscription Pool — UNIQUE feature) ────────────── -->
+    <section class="tab-panel" data-tab="wallet">
+      <div class="wallet-banner">
+        <div>
+          <strong>Subscription Pool Wallet</strong> — tracks <strong>API calls</strong>
+          (not tokens) against each Pro plan's quota window. Numbers here are
+          <em>messages remaining</em>, not tokens. For token savings via cache,
+          see the Savings tab.
+        </div>
+      </div>
+      <div class="wallet-grid" id="walletList">
+        <div class="loading">loading wallet</div>
+      </div>
+    </section>
+
+    <!-- ─── Tab: Memory ───────────────────────────────────────────────── -->
+    <section class="tab-panel" data-tab="memory">
+      <div class="memory-form">
+        <input id="memCaller" class="settings-input" style="max-width:280px;" placeholder="caller id">
+        <button class="btn" id="memLoadBtn" type="button">load facts</button>
+        <span style="flex:1;"></span>
+        <input id="memFactKey" class="settings-input" style="max-width:200px;" placeholder="fact key">
+        <input id="memFactValue" class="settings-input" style="max-width:280px;" placeholder="fact value">
+        <button class="btn" id="memSaveBtn" type="button">remember</button>
+      </div>
+      <div class="mem-list" id="memList">
+        <div class="empty-state">enter a caller id and click load</div>
+      </div>
+
+      <h2 class="h-section">Knowledge Graph <span class="h-meta">all callers + facts</span></h2>
+      <div class="graph-wrap">
+        <svg id="memoryGraph" viewBox="0 0 880 460" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="graph-legend">
+          <span><span class="dot" style="background:#0f766e;"></span> caller</span>
+          <span><span class="dot" style="background:#2563eb;"></span> fact key</span>
+          <span><span class="dot" style="background:#a78bfa;"></span> value</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Tab: Leaderboard ─────────────────────────────────────────── -->
+    <section class="tab-panel" data-tab="leaderboard">
+      <div class="leaderboard-podium" id="leaderboardPodium">
+        <div class="loading">computing standings</div>
+      </div>
+      <h2 class="h-section">Race Leaderboard <span class="h-meta">last 7 days</span></h2>
+      <div class="leaderboard-table" id="leaderboardTable"><div class="loading">loading</div></div>
+    </section>
+
+    <!-- ─── Tab: Share Card ──────────────────────────────────────────────── -->
+    <section class="tab-panel" data-tab="share">
+      <h2 class="h-section">Public Share Card <span class="h-meta">embeddable SVG · OG-card sized · no auth required</span></h2>
+      <div class="share-controls">
+        <label class="settings-row-label">Period:
+          <select id="shareCardPeriod" class="settings-input" style="width: 140px; display:inline-block; margin-left:8px;">
+            <option value="day">day</option>
+            <option value="week">week</option>
+            <option value="month" selected>month</option>
+            <option value="all">all-time</option>
+          </select>
+        </label>
+        <label class="settings-row-label" style="margin-left:24px;">Theme:
+          <select id="shareCardTheme" class="settings-input" style="width: 120px; display:inline-block; margin-left:8px;">
+            <option value="dark">dark</option>
+            <option value="light">light</option>
+          </select>
+        </label>
+        <button class="btn primary" id="shareCardRefresh" type="button">refresh</button>
+        <button class="btn" id="shareCardCopyUrl" type="button">copy URL</button>
+        <button class="btn" id="shareCardDownload" type="button">download SVG</button>
+      </div>
+      <div class="share-preview">
+        <img id="shareCardImg" alt="LLM Gateway share card" loading="lazy">
+      </div>
+      <div class="share-url" id="shareCardUrl"></div>
+      <div class="share-hint">Use this URL anywhere — Twitter/LinkedIn previews, blog headers, README badges. Updates automatically every 5 min.</div>
+    </section>
+
+    <!-- ─── Tab: Monthly Report ──────────────────────────────────────────── -->
+    <section class="tab-panel" data-tab="report">
+      <h2 class="h-section">Monthly Report <span class="h-meta">save as PDF via browser print</span></h2>
+      <div class="share-controls">
+        <label class="settings-row-label">Year:
+          <input id="reportYear" class="settings-input" type="number" style="width:120px;display:inline-block;margin-left:8px;">
+        </label>
+        <label class="settings-row-label" style="margin-left:24px;">Month:
+          <input id="reportMonth" class="settings-input" type="number" min="1" max="12" style="width:90px;display:inline-block;margin-left:8px;">
+        </label>
+        <button class="btn primary" id="reportOpen" type="button">open report</button>
+      </div>
+      <div class="share-hint">Tip: in the report window, press <code>Cmd/Ctrl+P</code> → "Save as PDF". The report is fully styled for A4 print.</div>
+    </section>
+
+    <!-- ─── Tab: API Reference ─────────────────────────────────────────── -->
+    <section class="tab-panel" data-tab="api">
+      <h2 class="h-section">API Reference <span class="h-meta">all endpoints route through compression + caller tracking</span></h2>
+
+      <div class="api-intro" style="margin: 8px 0 16px; color: var(--text-muted, #888); font-size: 13px; line-height: 1.5;">
+        The LLM Gateway exposes three POST endpoints and one GET. Every call is logged in
+        <em>activity</em>, compressed when input ≥ 700 tokens, and routed via <code>routing-rules.yaml</code>
+        to the right subscription bridge (Claude Code, ChatGPT, Copilot, M365 Copilot, Codex) or local Ollama.
+      </div>
+
+      <!-- ── Endpoint card: OpenAI-compatible ─────────────────────────── -->
+      <div class="api-card" data-endpoint="chat">
+        <div class="api-card-head">
+          <span class="api-method">POST</span>
+          <code class="api-path">/v1/chat/completions</code>
+          <span class="api-tag">OpenAI-compatible · works with `openai` SDK</span>
+          <button class="btn ghost api-copy" data-target="api-snippet-chat" type="button">copy</button>
+        </div>
+        <pre id="api-snippet-chat" class="api-snippet"><code>curl http://localhost:3103/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4.6",
+    "messages": [{"role": "user", "content": "hi"}]
+  }'</code></pre>
+      </div>
+
+      <!-- ── Endpoint card: Anthropic-compatible ──────────────────────── -->
+      <div class="api-card" data-endpoint="messages">
+        <div class="api-card-head">
+          <span class="api-method">POST</span>
+          <code class="api-path">/v1/messages</code>
+          <span class="api-tag">Anthropic-compatible · works with `@anthropic-ai/sdk`</span>
+          <button class="btn ghost api-copy" data-target="api-snippet-messages" type="button">copy</button>
+        </div>
+        <pre id="api-snippet-messages" class="api-snippet"><code>curl http://localhost:3103/v1/messages \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4.6",
+    "messages": [{"role": "user", "content": "hi"}],
+    "max_tokens": 1024
+  }'</code></pre>
+      </div>
+
+      <!-- ── Endpoint card: Native ────────────────────────────────────── -->
+      <div class="api-card" data-endpoint="completion">
+        <div class="api-card-head">
+          <span class="api-method">POST</span>
+          <code class="api-path">/v1/completion</code>
+          <span class="api-tag">native — full caller-tracking + compression options</span>
+          <button class="btn ghost api-copy" data-target="api-snippet-completion" type="button">copy</button>
+        </div>
+        <pre id="api-snippet-completion" class="api-snippet"><code>curl http://localhost:3103/v1/completion \
+  -H "Content-Type: application/json" \
+  -d '{
+    "caller": "my-app",
+    "task_type": "generic_qa",
+    "input": "your prompt here",
+    "options": { "compression": { "enabled": true, "mode": "auto" } }
+  }'</code></pre>
+      </div>
+
+      <!-- ── Endpoint card: Models list ───────────────────────────────── -->
+      <div class="api-card" data-endpoint="models">
+        <div class="api-card-head">
+          <span class="api-method">GET</span>
+          <code class="api-path">/v1/models</code>
+          <span class="api-tag">list every model the gateway can route to</span>
+          <button class="btn ghost api-copy" data-target="api-snippet-models" type="button">copy</button>
+        </div>
+        <pre id="api-snippet-models" class="api-snippet"><code>curl http://localhost:3103/v1/models</code></pre>
+      </div>
+
+      <!-- ── Try-It-Out playground ────────────────────────────────────── -->
+      <h2 class="h-section" style="margin-top: 28px;">Try it out <span class="h-meta">live POST against the gateway</span></h2>
+      <div class="api-tryout">
+        <div class="api-tryout-row">
+          <label class="settings-row-label">Endpoint:
+            <select id="apiTryEndpoint" class="settings-input" style="width: 220px; margin-left: 8px;">
+              <option value="/v1/completion">/v1/completion (native)</option>
+              <option value="/v1/chat/completions">/v1/chat/completions (OpenAI)</option>
+              <option value="/v1/messages">/v1/messages (Anthropic)</option>
+            </select>
+          </label>
+          <label class="settings-row-label" style="margin-left: 18px;">Model:
+            <input id="apiTryModel" class="settings-input" type="text" value="claude-sonnet-4.6" style="width: 200px; margin-left: 8px;">
+          </label>
+        </div>
+        <label class="settings-row-label" style="display: block; margin-top: 10px;">Prompt:
+          <textarea id="apiTryPrompt" class="settings-input" rows="4" style="width: 100%; margin-top: 6px;" placeholder="Type your prompt — long inputs (>700 tokens) will be compressed automatically.">Say hello in three different languages.</textarea>
+        </label>
+        <div style="margin-top: 10px;">
+          <button class="btn primary" id="apiTryRun" type="button">send request</button>
+          <span id="apiTryStatus" style="margin-left: 12px; font-size: 12px; color: var(--text-muted, #888);"></span>
+        </div>
+        <div id="apiTryResultWrap" style="margin-top: 14px; display: none;">
+          <div class="api-tryout-meta" id="apiTryMeta" style="font-size: 12px; color: var(--text-muted, #888); margin-bottom: 6px;"></div>
+          <pre class="api-snippet"><code id="apiTryResult"></code></pre>
+        </div>
+      </div>
+
+      <!-- ── Bridge mapping (model → subscription) ────────────────────── -->
+      <h2 class="h-section" style="margin-top: 28px;">Model → Bridge Mapping <span class="h-meta">which subscription each model alias routes to</span></h2>
+      <div class="api-bridge-table-wrap">
+        <table class="api-bridge-table" id="apiBridgeTable">
+          <thead>
+            <tr>
+              <th>Model alias</th>
+              <th>Bridge</th>
+              <th>Subscription used</th>
+              <th>Port</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>claude-sonnet-4.6</code>, <code>claude-haiku</code>, <code>claude-opus</code></td><td>claude-bridge</td><td>Claude Code Max (OAuth)</td><td>3250</td><td class="api-bridge-status" data-bridge="claude-bridge">—</td></tr>
+            <tr><td><code>gpt-4o</code>, <code>gpt-4.1</code>, <code>gpt-5.x</code></td><td>openai-bridge</td><td>ChatGPT Plus / Pro</td><td>3251</td><td class="api-bridge-status" data-bridge="openai-bridge">—</td></tr>
+            <tr><td><code>copilot-gpt-4o</code>, <code>copilot-claude-3.7</code></td><td>copilot-bridge</td><td>GitHub Copilot</td><td>3252</td><td class="api-bridge-status" data-bridge="copilot-bridge">—</td></tr>
+            <tr><td><code>codex-mini</code>, <code>gpt-5.1-codex-mini</code></td><td>codex-bridge</td><td>OpenAI Codex CLI</td><td>3253</td><td class="api-bridge-status" data-bridge="codex-bridge">—</td></tr>
+            <tr><td><code>m365-copilot</code></td><td>m365-copilot-bridge</td><td>Microsoft 365 Copilot</td><td>3257</td><td class="api-bridge-status" data-bridge="m365-copilot-bridge">—</td></tr>
+            <tr><td><code>qwen2.5:3b / 7b / 14b / 32b</code>, <code>llama3.3:70b</code>, custom local models</td><td>ollama (local)</td><td>local — no cost</td><td>11434</td><td class="api-bridge-status" data-bridge="ollama">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="share-hint" style="margin-top: 12px;">
+        The gateway picks the bridge from <code>routing-rules.yaml</code> based on <code>task_type</code> and the
+        requested <code>model</code>. You can also hit a bridge directly (e.g. <code>http://localhost:3250/v1/messages</code>)
+        — but then you bypass compression, savings tracking, and the routing rules.
+      </div>
+    </section>
+
+    <!-- ─── Caller Deep-Dive Modal ───────────────────────────────────── -->
+    <div class="modal-overlay" id="callerModal" role="dialog" aria-modal="true">
+      <div class="modal" style="max-width: 900px;">
+        <div class="modal-header">
+          <h2 id="callerModalTitle">caller details</h2>
+          <button class="modal-close" id="callerModalClose" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body" id="callerModalBody">
+          <div class="loading">loading caller details</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Settings Modal ──────────────────────────────────────────────── -->
+    <div class="modal-overlay" id="settingsModal" role="dialog" aria-modal="true">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>gateway settings</h2>
+          <button class="modal-close" id="settingsClose" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-section">
+            <div class="settings-section-title">dashboard view</div>
+            <p class="settings-section-desc">Hide advanced features you don't use. <strong>Recommended for users with 1–3 subscriptions.</strong></p>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="settings-row-label">Simple Mode</span>
+                <span class="settings-row-meta">Show only: overview · subscriptions · wallet · activity · savings. Hide: providers, races, share, report, memory.</span>
+              </div>
+              <label class="settings-toggle">
+                <input type="checkbox" id="uiSimpleMode">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="settings-row-label">Hide unconfigured providers</span>
+                <span class="settings-row-meta">Don't show provider cards that aren't enabled (Cerebras, Groq, etc.)</span>
+              </div>
+              <label class="settings-toggle">
+                <input type="checkbox" id="uiHideEmpty">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="settings-row-label">Tab tooltips</span>
+                <span class="settings-row-meta">Show a one-line explanation on hover for every tab.</span>
+              </div>
+              <label class="settings-toggle">
+                <input type="checkbox" id="uiTooltips">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">routing mode</div>
+            <p class="settings-section-desc">Restrict which provider categories the gateway is allowed to use.</p>
+            <div class="settings-radio-group" id="routingModeGroup">
+              <label class="settings-radio"><input type="radio" name="routingMode" value="auto"><span>auto · all</span></label>
+              <label class="settings-radio"><input type="radio" name="routingMode" value="subscription-only"><span>subscriptions only</span></label>
+              <label class="settings-radio"><input type="radio" name="routingMode" value="api-only"><span>api only</span></label>
+              <label class="settings-radio"><input type="radio" name="routingMode" value="local-only"><span>local · ollama only</span></label>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">cli subscriptions (abos)</div>
+            <p class="settings-section-desc">Toggle which subscription CLIs you have. The auto-gateway only spawns bridges for enabled ones.</p>
+            <div id="settingsSubscriptionsList"></div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">api providers</div>
+            <p class="settings-section-desc">API keys for paid/free-tier endpoints. Stored locally with file mode 0600 — never returned in plaintext.</p>
+            <div id="settingsApiList"></div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">local · ollama</div>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="settings-row-label">Ollama Base URL</span>
+                <span class="settings-row-meta">OLLAMA_BASE_URL</span>
+                <input class="settings-input" type="text" id="ollamaBaseUrl" placeholder="http://localhost:11434">
+              </div>
+              <label class="settings-toggle">
+                <input type="checkbox" id="ollamaEnabled">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <span class="save-status" id="settingsSaveStatus"></span>
+          <button class="btn" id="settingsCancel" type="button">cancel</button>
+          <button class="btn primary" id="settingsSave" type="button">save</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="conn-pill">
+    <span class="dot" id="connectionDot"></span>
+    <span id="connectionText">connected</span>
+  </div>
+
+  <script>
+    const HEALTH_CHECK_INTERVAL = 30000;
+    const METRICS_REFRESH_INTERVAL = 15000;
+    const REQUESTS_REFRESH_INTERVAL = 15000;
+    const API_BASE = '';
+    let selectedHours = 24;
+    let lastMetrics = null;
+    let metricsIntervalId = null;
+    let requestsIntervalId = null;
+    const DASHBOARD_TOKEN_KEY = 'llmGatewayDashboardToken';
+
+    function getDashboardToken() {
+      return localStorage.getItem(DASHBOARD_TOKEN_KEY) || '';
+    }
+
+    function setDashboardToken(token) {
+      if (token) localStorage.setItem(DASHBOARD_TOKEN_KEY, token);
+      else localStorage.removeItem(DASHBOARD_TOKEN_KEY);
+    }
+
+    function withAuthHeaders(headers = {}) {
+      const token = getDashboardToken();
+      return token ? { ...headers, Authorization: `Bearer ${token}` } : headers;
+    }
+
+    async function apiFetch(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: withAuthHeaders(options.headers || {}),
+      });
+      if (response.status !== 401 && response.status !== 503) return response;
+
+      const token = prompt('Dashboard admin token');
+      if (!token) return response;
+      setDashboardToken(token.trim());
+      return fetch(url, {
+        ...options,
+        headers: withAuthHeaders(options.headers || {}),
+      });
+    }
+
+    // ─── Tab switching ───────────────────────────────────────────────────
+    document.querySelectorAll('.tab-trigger').forEach(t => {
+      t.addEventListener('click', () => {
+        const target = t.dataset.tab;
+        document.querySelectorAll('.tab-trigger').forEach(x => x.classList.toggle('active', x === t));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tab === target));
+        history.replaceState(null, '', `#${target}`);
+      });
+    });
+    if (location.hash) {
+      const target = location.hash.slice(1);
+      const trigger = document.querySelector(`.tab-trigger[data-tab="${target}"]`);
+      if (trigger) trigger.click();
+    }
+
+    // Health check
+    async function checkHealth() {
+      try {
+        const response = await fetch(`${API_BASE}/api/dashboard/health`);
+        const data = await response.json();
+        const isHealthy = data.status === 'ok';
+        updateHealthStatus(isHealthy, data);
+        return isHealthy;
+      } catch (error) {
+        console.error('Health check failed:', error);
+        updateHealthStatus(false, { error: error.message });
+        return false;
+      }
+    }
+
+    function updateHealthStatus(isHealthy, _data) {
+      const indicator = document.getElementById('dbStatusIndicator');
+      const status = document.getElementById('dbStatus');
+      indicator.className = isHealthy ? 'dot ok' : 'dot err';
+      status.textContent = isHealthy ? 'connected' : 'disconnected';
+    }
+
+    // Load recent requests
+    async function loadRequests() {
+      try {
+        const [response, clientsResponse] = await Promise.all([
+          apiFetch(`${API_BASE}/api/dashboard/requests?limit=50&hours=${selectedHours}`),
+          apiFetch(`${API_BASE}/api/dashboard/clients?hours=${selectedHours}`)
+        ]);
+        const data = await response.json();
+        const clients = await clientsResponse.json();
+        if (clients.success) renderClients(clients.data);
+        if (data.success) renderRequests(data.data);
+      } catch (error) {
+        console.error('Failed to load requests:', error);
+      }
+    }
+
+    function renderClients(clients) {
+      const el = document.getElementById('clientsCoverage');
+      el.innerHTML = clients.map(client => {
+        const lastSeen = client.lastSeen ? new Date(client.lastSeen).toLocaleString() : 'never';
+        const callerList = client.callers?.length ? client.callers.join(', ') : 'no caller id seen';
+        const bridgeState = client.bridgeProvider
+          ? `${client.bridgeProvider}: ${client.bridgeStatus || 'not configured'}${client.bridgeDetail ? ` (${client.bridgeDetail})` : ''}`
+          : 'bridge: OpenAI-compatible / manual client config';
+        return `
+          <div class="client-item">
+            <div class="client-top">
+              <div class="client-name" title="${escapeHtml(client.label)}">${escapeHtml(client.label)}</div>
+              <div class="client-state ${client.status}">${client.status.replace('-', ' ')}</div>
+            </div>
+            <div class="client-meta">
+              <div><strong>${formatNumber(client.requestCount)}</strong> requests · <strong>${formatNumber(client.tokensSaved)}</strong> saved</div>
+              <div title="${escapeHtml(callerList)}">caller: ${escapeHtml(callerList)}</div>
+              <div title="${escapeHtml(bridgeState)}">gateway: ${escapeHtml(bridgeState)}</div>
+              <div>last: ${escapeHtml(lastSeen)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderRequests(requests) {
+      const table = document.getElementById('requestsTable');
+      if (!requests.length) {
+        table.innerHTML = '<div class="empty-state">no requests in selected timeframe</div>';
+        return;
+      }
+      table.innerHTML = requests.map(req => `
+        <div class="req-row body">
+          <div title="${req.request_id}">${req.request_id.substring(0, 14)}…</div>
+          <div>${escapeHtml(req.caller)}</div>
+          <div title="${req.model}">${req.model}</div>
+          <div><span class="req-status ${req.status}">${req.status}</span></div>
+          <div>${formatNumber(req.compression_tokens_before ?? req.tokens_in ?? 0)}</div>
+          <div>${formatNumber(req.compression_tokens_after ?? req.tokens_in ?? 0)}</div>
+          <div>${formatSavedTokens(req.compression_tokens_saved ?? 0)}</div>
+          <div title="${escapeHtml(req.compression_mode || 'not tracked')}">${formatCompression(req)}</div>
+          <div>${formatCost(req.cost_usd)}</div>
+          <div>${req.latency_ms}ms</div>
+        </div>
+      `).join('');
+    }
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString();
+    }
+
+    function formatSavedTokens(value) {
+      const saved = Number(value || 0);
+      return saved > 0 ? saved.toLocaleString() : '0';
+    }
+
+    function formatCompression(req) {
+      const mode = String(req.compression_mode || 'none:none').split(':').pop() || 'none';
+      const pct = Number(req.compression_savings_pct || 0);
+      if (!req.compression_mode) return 'not tracked';
+      if (pct <= 0) return mode === 'none' ? 'checked' : `${escapeHtml(mode)} · 0%`;
+      return `${escapeHtml(mode)} · ${pct.toFixed(1)}%`;
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    }
+
+    // Load metrics
+    async function loadMetrics() {
+      try {
+        const bucketMinutes = (selectedHours || 24) * 60;
+        const response = await apiFetch(`${API_BASE}/api/dashboard/request-metrics?bucket_minutes=${bucketMinutes}`);
+        const data = await response.json();
+        if (data.success) {
+          updateMetrics(data.data);
+          lastMetrics = data.data;
+        }
+      } catch (error) {
+        console.error('Failed to load metrics:', error);
+      }
+    }
+
+    function formatCost(cost) {
+      const c = cost || 0;
+      if (c === 0) return '$0.00';
+      if (c < 0.01) return '$' + c.toFixed(6);
+      if (c < 1) return '$' + c.toFixed(4);
+      return '$' + c.toFixed(2);
+    }
+
+    function updateMetrics(metrics) {
+      document.getElementById('totalRequests').textContent = (metrics.total_requests || 0).toLocaleString();
+      document.getElementById('successRate').innerHTML = ((metrics.success_rate || 0) * 100).toFixed(1) + '<span class="metric-unit">%</span>';
+      document.getElementById('avgLatency').innerHTML = Math.round(metrics.avg_latency || 0) + '<span class="metric-unit">ms</span>';
+      document.getElementById('totalCost').textContent = formatCost(metrics.total_cost);
+      document.getElementById('avgConfidence').innerHTML = (metrics.avg_confidence || 0).toFixed(1) + '<span class="metric-unit">/10</span>';
+      document.getElementById('fallbackPercent').innerHTML = ((metrics.compression_rate || 0) * 100).toFixed(1) + '<span class="metric-unit">%</span>';
+      document.getElementById('requestsChange').textContent = `${(metrics.total_tokens || 0).toLocaleString()} tokens`;
+      document.getElementById('costChange').textContent = `avoided ${formatCost(metrics.estimated_api_cost_avoided)}`;
+      document.getElementById('fallbackChange').textContent = `${(metrics.compression_tokens_saved || 0).toLocaleString()} tokens · ${metrics.compression_operations || 0} ops`;
+
+      if (metrics.top_models?.length) {
+        document.getElementById('topModels').innerHTML = metrics.top_models.map(m => `
+          <div class="chip">
+            <div class="chip-name">${escapeHtml(m.model)}</div>
+            <div class="chip-meta"><span class="num">${m.count}</span> requests</div>
+          </div>
+        `).join('');
+      } else {
+        document.getElementById('topModels').innerHTML = '<div class="empty-state">no model usage yet</div>';
+      }
+
+      if (metrics.top_callers?.length) {
+        document.getElementById('topCallers').innerHTML = metrics.top_callers.map(c => `
+          <div class="chip">
+            <div class="chip-name">${escapeHtml(c.caller)}</div>
+            <div class="chip-meta"><span class="num">${c.count}</span> requests</div>
+          </div>
+        `).join('');
+      } else {
+        document.getElementById('topCallers').innerHTML = '<div class="empty-state">no callers yet</div>';
+      }
+    }
+
+    // Load providers
+    async function loadProviders() {
+      try {
+        const response = await apiFetch(`${API_BASE}/api/dashboard/providers`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (!payload.success) throw new Error(payload.error || 'failed');
+        renderProviders(payload.data.grouped);
+        const total = payload.data.summary.totalProviders;
+        const cfg = payload.data.summary.configuredCount;
+        document.getElementById('providersTabBadge').textContent = `${cfg}/${total}`;
+      } catch (error) {
+        const msg = `<div class="empty-state">error: ${error.message}</div>`;
+        document.getElementById('providersList_local').innerHTML = msg;
+        document.getElementById('providersList_subscription').innerHTML = msg;
+        document.getElementById('providersList_free').innerHTML = msg;
+      }
+    }
+
+    function renderProviders(grouped) {
+      const empty = '<div class="empty-state">none configured</div>';
+      const renderGroup = (id, items) => {
+        const c = document.getElementById(id);
+        c.innerHTML = items?.length ? items.map(renderProviderItem).join('') : empty;
+      };
+      renderGroup('providersList_local', grouped.local);
+      renderGroup('providersList_subscription', grouped.subscription);
+      renderGroup('providersList_free', grouped.free);
+    }
+
+    function renderProviderItem(provider) {
+      const statusClass = provider.status === 'configured' ? 'tag-configured' : 'tag-unconfigured';
+      const modelList = provider.models.map(m => m.id).join(', ');
+      const displayName = provider.label || provider.name;
+      const techName = provider.label && provider.label !== provider.name
+        ? `<div class="provider-tech-name">${provider.name}</div>` : '';
+      const rateLimit = provider.rateLimitRpm > 0
+        ? `<div class="provider-rate">limit: ${provider.rateLimitRpm} req/min</div>` : '';
+      const envHint = provider.status === 'unconfigured' && provider.envKey
+        ? `<div class="provider-env-hint">set <code>${provider.envKey}</code> to activate</div>` : '';
+      const runtimeStatus = provider.runtimeStatus || (provider.status === 'configured' ? 'configured' : '');
+      const runtimeClass = provider.runtimeHealthy ? 'runtime-ready'
+        : runtimeStatus === 'auth_required' || provider.runtimeDetail ? 'runtime-warn'
+        : 'runtime-muted';
+      const runtimeLabel = provider.runtimeDetail
+        ? `${runtimeStatus}: ${provider.runtimeDetail}`
+        : runtimeStatus;
+      const runtime = runtimeLabel
+        ? `<div class="provider-runtime ${runtimeClass}"><span class="runtime-dot"></span><span>${escapeHtml(runtimeLabel)}</span></div>`
+        : '';
+      return `
+        <div class="provider-item" data-status="${provider.status}">
+          <div class="provider-header">
+            <div class="provider-name">${escapeHtml(displayName)}</div>
+            <div class="provider-tag ${statusClass}">${provider.status}</div>
+          </div>
+          ${techName}
+          ${runtime}
+          <div class="provider-models">${escapeHtml(modelList)}</div>
+          ${rateLimit}
+          ${envHint}
+        </div>
+      `;
+    }
+
+    // ─── Subscription Auto-Gateway ────────────────────────────────────────
+    async function loadSubscriptions() {
+      try {
+        const response = await apiFetch(`${API_BASE}/api/dashboard/subscriptions`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (!payload.success) throw new Error(payload.error || 'unknown');
+        renderSubscriptions(payload.data);
+      } catch (error) {
+        document.getElementById('subscriptionsList').innerHTML =
+          `<div class="empty-state">discovery failed: ${error.message}</div>`;
+      }
+    }
+
+    function renderSubscriptions(data) {
+      const { subscriptions, summary } = data;
+      const stateEl = document.getElementById('subsAutoState');
+      const parts = [];
+      if (summary.detected) parts.push(`${summary.detected} detected`);
+      if (summary.userDeclared) parts.push(`${summary.userDeclared} declared`);
+      if (summary.running) parts.push(`${summary.running} live`);
+      const headline = summary.autoGatewayEnabled ? 'active' : 'detection + declaration';
+      stateEl.textContent = `${headline} — ${parts.join(' · ') || 'open settings to declare your subscriptions'}`;
+
+      document.getElementById('subsTabBadge').textContent = `${summary.installed}/${summary.total}`;
+
+      const list = document.getElementById('subscriptionsList');
+      if (!subscriptions.length) {
+        list.innerHTML = '<div class="empty-state">no subscriptions in catalog</div>';
+        return;
+      }
+      list.innerHTML = subscriptions.map(renderSubscriptionCard).join('');
+    }
+
+    function renderSubscriptionCard(s) {
+      const available = s.installed;
+      const cardClass = s.bridgeRunning ? 'running' : (available ? 'installed' : 'missing');
+      const stateClass = s.bridgeRunning ? 'running' : (available ? 'installed' : 'missing');
+      let stateLabel;
+      if (s.bridgeRunning) stateLabel = '● bridge live';
+      else if (s.detected && s.userDeclared) stateLabel = '◆ detected+declared';
+      else if (s.detected) stateLabel = '◆ detected';
+      else if (s.userDeclared) stateLabel = '◇ declared';
+      else stateLabel = '○ not configured';
+
+      const versionLine = s.version
+        ? `<div class="subs-meta">${s.command} → ${escapeHtml(s.version)}</div>`
+        : `<div class="subs-meta">${s.command}${s.userDeclared ? ' (declared)' : ''}</div>`;
+      const bridgeBlock = s.bridgeUrl
+        ? `<div class="subs-bridge-url">bridge: ${s.bridgeUrl}${s.autoSpawned ? ' (auto)' : ''}</div>`
+        : '';
+      const modelsLine = s.models?.length
+        ? `<div class="subs-models">${s.models.map(m => m.id).join(', ')}</div>` : '';
+      let hint = '';
+      if (!s.detected && !s.userDeclared) {
+        hint = `<div class="subs-install-hint">install <code>${s.command}</code> on the gateway host, or declare it in settings.</div>`;
+      } else if (!s.detected && s.userDeclared) {
+        hint = `<div class="subs-install-hint" style="color:#6aa0ff;border-color:rgba(106,160,255,0.25);background:rgba(106,160,255,0.05);">declared — use via your local <code>${s.command}</code> CLI. gateway routes through it.</div>`;
+      }
+      return `
+        <div class="subs-card ${cardClass}">
+          <div class="subs-head">
+            <div class="subs-label">${escapeHtml(s.label)}</div>
+            <span class="subs-state ${stateClass}">${stateLabel}</span>
+          </div>
+          ${versionLine}
+          ${modelsLine}
+          ${bridgeBlock}
+          ${hint}
+        </div>
+      `;
+    }
+
+    // ─── Full Discovery: CLIs + Local LLMs + API Keys ────────────────────
+    document.getElementById('discoverFullBtn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('discoverFullBtn');
+      const wrap = document.getElementById('discoverReportWrap');
+      const meta = document.getElementById('discoverReportMeta');
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = '⏳ scanning…';
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/discover`, { method: 'POST' });
+        const payload = await res.json();
+        if (!payload.success) throw new Error(payload.error || 'discovery failed');
+        const r = payload.data.report;
+        const spawnedCount = payload.data.spawnedCount;
+
+        wrap.style.display = 'block';
+        meta.textContent = `host: ${r.host} · scanned: ${new Date(r.generatedAt).toLocaleTimeString()} · ${spawnedCount} bridges spawned · ${r.summary.totalProviders} total providers, ${r.summary.totalRoutableModels} models`;
+
+        // CLI subscriptions
+        document.getElementById('discCntSubs').textContent = r.subscriptions.detected;
+        document.getElementById('discListSubs').innerHTML = r.subscriptions.items.map(s => `
+          <li>
+            <span>${s.descriptor.label}</span>
+            <span class="${s.installed ? 'disc-ok' : 'disc-no'}">${s.installed ? (s.authenticated === true ? '✓ auth' : (s.authenticated === false ? '⚠ unauth' : '?')) : '—'}</span>
+          </li>
+        `).join('');
+
+        // Local LLM servers
+        document.getElementById('discCntLocal').textContent = r.localLLMs.detected;
+        document.getElementById('discListLocal').innerHTML = r.localLLMs.items.map(l => `
+          <li>
+            <span>${l.label}<br><span style="font-size:0.66rem;opacity:0.6;">${l.url}</span></span>
+            <span class="${l.detected ? 'disc-ok' : 'disc-no'}">${l.detected ? `✓ ${l.models.length} models · ${l.latencyMs}ms` : '— offline'}</span>
+          </li>
+        `).join('');
+
+        // API-key providers
+        document.getElementById('discCntKeys').textContent = r.apiKeys.configured;
+        document.getElementById('discListKeys').innerHTML = r.apiKeys.items.map(k => `
+          <li>
+            <span>${k.label}<br><span style="font-size:0.66rem;opacity:0.6;">${k.envKey}</span></span>
+            <span class="${k.configured ? 'disc-ok' : 'disc-no'}">${k.configured ? '✓ set' : '— missing'}</span>
+          </li>
+        `).join('');
+
+        btn.textContent = `✓ found ${r.summary.totalProviders}`;
+        await loadSubscriptions();
+      } catch (e) {
+        btn.textContent = `✗ ${e.message}`;
+      } finally {
+        setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 3000);
+      }
+    });
+
+    document.getElementById('subsSpawnBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('subsSpawnBtn');
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = '⟳ spawning…';
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/subscriptions/spawn`, { method: 'POST' });
+        const payload = await res.json();
+        if (!payload.success) throw new Error(payload.error || 'spawn failed');
+        btn.textContent = `✓ ${payload.data.spawnedCount} spawned`;
+        await loadSubscriptions();
+      } catch (e) {
+        btn.textContent = `✗ ${e.message}`;
+      } finally {
+        setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 2500);
+      }
+    });
+
+    // Polling
+    function setupPolling() {
+      document.getElementById('pollingStatusIndicator').className = 'dot ok';
+      document.getElementById('pollingStatus').textContent = 'live';
+      document.getElementById('connectionDot').className = 'dot';
+      document.getElementById('connectionText').textContent = 'connected';
+
+      if (metricsIntervalId) clearInterval(metricsIntervalId);
+      metricsIntervalId = setInterval(loadMetrics, METRICS_REFRESH_INTERVAL);
+
+      if (requestsIntervalId) clearInterval(requestsIntervalId);
+      requestsIntervalId = setInterval(loadRequests, REQUESTS_REFRESH_INTERVAL);
+
+      loadMetrics();
+      loadRequests();
+    }
+
+    // Filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedHours = parseInt(btn.dataset.hours);
+        loadRequests();
+        loadMetrics();
+      });
+    });
+
+    // ─── Settings Modal ───────────────────────────────────────────────────
+    const SUBSCRIPTION_LABELS = {
+      'claude-code': 'Claude Code (Anthropic)',
+      'github-copilot': 'GitHub / Microsoft Copilot',
+      'chatgpt': 'OpenAI ChatGPT Plus',
+      'gemini': 'Google Gemini Advanced',
+      'codex': 'OpenAI Codex CLI',
+      'aider': 'Aider Pair Programmer',
+    };
+    const API_PROVIDER_LABELS = {
+      'cerebras': { label: 'Cerebras', envKey: 'CEREBRAS_API_KEY', placeholder: 'csk-...' },
+      'groq': { label: 'Groq', envKey: 'GROQ_API_KEY', placeholder: 'gsk_...' },
+      'mistral': { label: 'Mistral AI', envKey: 'MISTRAL_API_KEY', placeholder: 'mistral key' },
+      'nvidia': { label: 'NVIDIA NIM', envKey: 'NVIDIA_API_KEY', placeholder: 'nvapi-...' },
+      'cloudflare': { label: 'Cloudflare Workers AI', envKey: 'CLOUDFLARE_AI_TOKEN', placeholder: 'cf token' },
+      'openai-codex': { label: 'OpenAI API (paid)', envKey: 'OPENAI_API_KEY', placeholder: 'sk-...' },
+    };
+
+    let currentSettings = null;
+
+    function openSettings() {
+      document.getElementById('settingsModal').classList.add('open');
+      loadSettingsIntoModal();
+    }
+    function closeSettings() {
+      document.getElementById('settingsModal').classList.remove('open');
+      const ss = document.getElementById('settingsSaveStatus');
+      ss.textContent = ''; ss.className = 'save-status';
+    }
+
+    async function loadSettingsIntoModal() {
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/settings`);
+        const payload = await res.json();
+        if (!payload.success) throw new Error(payload.error || 'load failed');
+        currentSettings = payload.data;
+        renderSettingsForm(currentSettings);
+      } catch (e) {
+        const ss = document.getElementById('settingsSaveStatus');
+        ss.textContent = `load error: ${e.message}`;
+        ss.className = 'save-status err';
+      }
+    }
+
+    function renderSettingsForm(s) {
+      document.querySelectorAll('input[name="routingMode"]').forEach(r => {
+        r.checked = (r.value === s.routingMode);
+        r.closest('.settings-radio').classList.toggle('active', r.checked);
+      });
+      document.getElementById('routingModeBadge').textContent = s.routingMode;
+
+      // UI mode toggles
+      const ui = s.ui ?? { simpleMode: false, hideEmptyProviders: true, showTooltips: true };
+      document.getElementById('uiSimpleMode').checked = !!ui.simpleMode;
+      document.getElementById('uiHideEmpty').checked = !!ui.hideEmptyProviders;
+      document.getElementById('uiTooltips').checked = !!ui.showTooltips;
+
+      const subList = document.getElementById('settingsSubscriptionsList');
+      subList.innerHTML = Object.entries(SUBSCRIPTION_LABELS).map(([id, label]) => {
+        const cfg = s.subscriptions?.[id] ?? { enabled: true, autoSpawn: true, bridgeUrl: '' };
+        const bridgeHint = cfg.bridgeUrl
+          ? `bridge: ${cfg.bridgeUrl}`
+          : 'no bridge URL — set one if the CLI runs on another machine';
+        return `
+          <div class="settings-row">
+            <div class="settings-row-info" style="grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;">
+              <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+                <span class="settings-row-label">${label}</span>
+                <span class="settings-row-meta">id: ${id} · ${bridgeHint}</span>
+                <input class="settings-input" type="text" data-sub-bridge="${id}" placeholder="https://your-bridge-host:port (leave blank for local auto-spawn)" value="${cfg.bridgeUrl || ''}">
+              </div>
+              <label class="settings-toggle" style="flex-shrink:0;">
+                <input type="checkbox" data-sub="${id}" ${cfg.enabled ? 'checked' : ''}>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const apiList = document.getElementById('settingsApiList');
+      apiList.innerHTML = Object.entries(API_PROVIDER_LABELS).map(([id, info]) => {
+        const cfg = s.apiProviders?.[id] ?? { enabled: false, hasKey: false };
+        const placeholder = cfg.hasKey ? '••••••• (key on file — leave blank to keep)' : info.placeholder;
+        return `
+          <div class="settings-row">
+            <div class="settings-row-info" style="grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;">
+              <div style="display:flex;flex-direction:column;gap:2px;flex:1;">
+                <span class="settings-row-label">${info.label}</span>
+                <span class="settings-row-meta">${info.envKey} · ${cfg.hasKey ? '✓ key set' : 'no key'}</span>
+                <input class="settings-input" type="password" data-api-key="${id}" placeholder="${placeholder}" autocomplete="new-password">
+              </div>
+              <label class="settings-toggle" style="flex-shrink:0;">
+                <input type="checkbox" data-api-enabled="${id}" ${cfg.enabled ? 'checked' : ''}>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('ollamaEnabled').checked = !!s.ollama?.enabled;
+      document.getElementById('ollamaBaseUrl').value = s.ollama?.baseUrl ?? 'http://localhost:11434';
+    }
+
+    async function saveSettingsFromModal() {
+      const ss = document.getElementById('settingsSaveStatus');
+      const saveBtn = document.getElementById('settingsSave');
+      saveBtn.disabled = true;
+      ss.textContent = 'saving…'; ss.className = 'save-status';
+
+      try {
+        const routingMode = document.querySelector('input[name="routingMode"]:checked')?.value ?? 'auto';
+
+        const subscriptions = {};
+        document.querySelectorAll('[data-sub]').forEach(cb => {
+          const id = cb.dataset.sub;
+          const bridgeInput = document.querySelector(`[data-sub-bridge="${id}"]`);
+          const bridgeUrl = bridgeInput?.value?.trim() ?? '';
+          subscriptions[id] = {
+            enabled: cb.checked,
+            autoSpawn: currentSettings?.subscriptions?.[id]?.autoSpawn ?? true,
+            bridgeUrl: bridgeUrl, // empty string = no remote bridge, fall back to local auto-spawn
+          };
+        });
+
+        const apiProviders = {};
+        Object.keys(API_PROVIDER_LABELS).forEach(id => {
+          const enabled = document.querySelector(`[data-api-enabled="${id}"]`)?.checked ?? false;
+          const newKey = document.querySelector(`[data-api-key="${id}"]`)?.value ?? '';
+          const entry = { enabled };
+          if (newKey.trim()) entry.apiKey = newKey.trim();
+          apiProviders[id] = entry;
+        });
+
+        const ollama = {
+          enabled: document.getElementById('ollamaEnabled').checked,
+          baseUrl: document.getElementById('ollamaBaseUrl').value.trim() || 'http://localhost:11434',
+        };
+
+        const ui = {
+          simpleMode: document.getElementById('uiSimpleMode').checked,
+          hideEmptyProviders: document.getElementById('uiHideEmpty').checked,
+          showTooltips: document.getElementById('uiTooltips').checked,
+        };
+
+        const res = await apiFetch(`${API_BASE}/api/dashboard/settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routingMode, subscriptions, apiProviders, ollama, ui }),
+        });
+        const payload = await res.json();
+        if (!payload.success) throw new Error(payload.error || `HTTP ${res.status}`);
+        currentSettings = payload.data;
+        document.getElementById('routingModeBadge').textContent = payload.data.routingMode;
+        ss.textContent = `saved · ${new Date().toLocaleTimeString()}`;
+        ss.className = 'save-status ok';
+        applyUiMode(ui);
+        await loadProviders();
+        await loadSubscriptions();
+      } catch (e) {
+        ss.textContent = `error: ${e.message}`;
+        ss.className = 'save-status err';
+      } finally {
+        saveBtn.disabled = false;
+      }
+    }
+
+    document.getElementById('settingsBtn').addEventListener('click', openSettings);
+    document.getElementById('settingsClose').addEventListener('click', closeSettings);
+    document.getElementById('settingsCancel').addEventListener('click', closeSettings);
+    document.getElementById('settingsSave').addEventListener('click', saveSettingsFromModal);
+    document.getElementById('settingsModal').addEventListener('click', (e) => {
+      if (e.target.id === 'settingsModal') closeSettings();
+    });
+    document.querySelectorAll('input[name="routingMode"]').forEach(r => {
+      r.addEventListener('change', () => {
+        document.querySelectorAll('.settings-radio').forEach(label => {
+          label.classList.toggle('active', label.querySelector('input').checked);
+        });
+      });
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSettings(); });
+
+    // ─── Savings Tab ─────────────────────────────────────────────────────
+    async function loadSavings() {
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/savings?hours=24&bucket_minutes=60`);
+        const payload = await res.json();
+        if (!payload.success) throw new Error(payload.error || 'load failed');
+        renderSavings(payload.data);
+      } catch (e) {
+        document.getElementById('savingsCounter').textContent = '$—';
+        document.getElementById('savingsSubLine').textContent = `error: ${e.message}`;
+      }
+    }
+
+    function renderSavings(data) {
+      const s = data.savings;
+      const series = data.series || [];
+
+      const counter = document.getElementById('savingsCounter');
+      counter.textContent = formatCost(s.totalCostSaved);
+
+      document.getElementById('savingsSubLine').textContent =
+        `${formatNumber(s.totalTokensSaved)} tokens prevented · ${s.totalHits} cache hits`;
+      document.getElementById('savingsHitRate').textContent = `hit rate ${s.hitRatePercent}%`;
+
+      document.getElementById('cacheEntries').textContent = formatNumber(s.uniqueEntries);
+      document.getElementById('tokensPrevented').textContent = formatNumber(s.totalTokensSaved);
+      document.getElementById('cacheHitRate').innerHTML = s.hitRatePercent.toFixed(1) + '<span class="metric-unit">%</span>';
+
+      // Tab badge
+      document.getElementById('savingsTabBadge').textContent = s.totalHits > 0 ? formatCost(s.totalCostSaved) : '·';
+
+      // Top callers
+      const tc = document.getElementById('topSavingCallers');
+      if (s.topCallers && s.topCallers.length) {
+        tc.innerHTML = s.topCallers.map(c => `
+          <div class="chip">
+            <div class="chip-name">${escapeHtml(c.caller)}</div>
+            <div class="chip-meta"><span class="num">${c.hits}</span> hits · <span class="num">${formatCost(c.saved)}</span> saved</div>
+          </div>
+        `).join('');
+      } else {
+        tc.innerHTML = '<div class="empty-state">no savings yet — send some duplicate prompts to see cache hits</div>';
+      }
+
+      // Sparkline
+      const svg = document.getElementById('savingsSparkline');
+      if (!series.length) { svg.innerHTML = ''; return; }
+      const W = 320, H = 64, PAD = 4;
+      const max = Math.max(0.0001, ...series.map(p => p.costSaved));
+      const stepX = (W - PAD * 2) / Math.max(1, series.length - 1);
+      const points = series.map((p, i) => {
+        const x = PAD + i * stepX;
+        const y = H - PAD - ((p.costSaved / max) * (H - PAD * 2));
+        return [x, y];
+      });
+      const linePath = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+      const areaPath = `${linePath} L${points[points.length - 1][0].toFixed(1)},${H - PAD} L${points[0][0].toFixed(1)},${H - PAD} Z`;
+      const last = points[points.length - 1];
+      svg.innerHTML = `
+        <path class="area" d="${areaPath}"></path>
+        <path class="line" d="${linePath}"></path>
+        <circle class="last" cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.5"></circle>
+      `;
+    }
+
+    document.getElementById('cacheClearBtn').addEventListener('click', async () => {
+      const caller = document.getElementById('cacheClearCaller').value.trim();
+      if (!caller) return alert('enter caller id');
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/cache/clear`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ caller }),
+        });
+        const p = await res.json();
+        alert(p.success ? `removed ${p.data.removed} entries` : p.error);
+        loadSavings();
+      } catch (e) { alert('error: ' + e.message); }
+    });
+
+    document.getElementById('cachePruneBtn').addEventListener('click', async () => {
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/cache/prune`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ max_age_days: 7 }),
+        });
+        const p = await res.json();
+        alert(p.success ? `pruned ${p.data.removed} stale entries` : p.error);
+        loadSavings();
+      } catch (e) { alert('error: ' + e.message); }
+    });
+
+    // ─── Wallet Tab (UNIQUE feature) ─────────────────────────────────────
+    async function loadWallet() {
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/wallet`);
+        const payload = await res.json();
+        if (!payload.success) throw new Error(payload.error || 'load failed');
+        renderWallet(payload.data);
+      } catch (e) {
+        document.getElementById('walletList').innerHTML =
+          `<div class="empty-state">error: ${e.message}</div>`;
+      }
+    }
+
+    function renderWallet(data) {
+      const list = document.getElementById('walletList');
+      if (!data.wallet?.length) { list.innerHTML = '<div class="empty-state">no subscriptions tracked</div>'; return; }
+
+      const totalRem = data.totals?.remaining ?? 0;
+      // Show units to avoid confusion with token counts elsewhere
+      document.getElementById('walletTabBadge').textContent = totalRem > 0 ? `${formatNumber(totalRem)} calls` : '·';
+
+      list.innerHTML = data.wallet.map(w => {
+        const util = w.utilizationPercent ?? 0;
+        const fillCls = util >= 90 ? 'err' : util >= 70 ? 'warn' : '';
+        const fillW = w.requestQuota ? Math.min(util, 100) : 0;
+        const remStr = w.requestQuota
+          ? `<strong>${w.remaining}</strong> / ${w.requestQuota} calls left`
+          : `<strong>—</strong> no quota tracked`;
+        const usedStr = `<strong>${w.used}</strong> calls used`;
+        const reset = w.resetAt
+          ? `resets ${new Date(w.resetAt).toLocaleString()}`
+          : `window: ${formatDuration(w.windowSeconds)}`;
+        const exhaust = w.predictedExhaustionAt
+          ? `predicted exhaustion: ${new Date(w.predictedExhaustionAt).toLocaleString()}`
+          : '';
+        return `
+          <div class="wallet-card" data-status="${w.recommendation}">
+            <div class="wallet-head">
+              <div class="wallet-label">${escapeHtml(w.label)}</div>
+              <div class="wallet-rec ${w.recommendation}">${w.recommendation.replace('-', ' ')}</div>
+            </div>
+            <div class="wallet-bar">
+              <div class="wallet-bar-fill ${fillCls}" style="width:${fillW}%"></div>
+            </div>
+            <div class="wallet-meta">
+              <span>${usedStr}</span>
+              <span>${remStr}</span>
+            </div>
+            <div class="wallet-reset">${reset}</div>
+            ${exhaust ? `<div class="wallet-reset">${exhaust}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function formatDuration(secs) {
+      if (secs >= 86400) return `${Math.round(secs / 86400)}d`;
+      if (secs >= 3600) return `${Math.round(secs / 3600)}h`;
+      if (secs >= 60) return `${Math.round(secs / 60)}m`;
+      return `${secs}s`;
+    }
+
+    // ─── Memory Tab ──────────────────────────────────────────────────────
+    async function loadMemoryFor(caller) {
+      if (!caller) return;
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/memory/${encodeURIComponent(caller)}`);
+        const p = await res.json();
+        if (!p.success) throw new Error(p.error || 'load failed');
+        renderMemory(p.data);
+      } catch (e) {
+        document.getElementById('memList').innerHTML = `<div class="empty-state">error: ${e.message}</div>`;
+      }
+    }
+
+    function renderMemory(data) {
+      const list = document.getElementById('memList');
+      if (!data.facts?.length) { list.innerHTML = `<div class="empty-state">no facts stored for "${escapeHtml(data.caller)}"</div>`; return; }
+      list.innerHTML = data.facts.map(f => `
+        <div class="mem-row">
+          <div class="mem-key">${escapeHtml(f.factKey)}</div>
+          <div class="mem-val">${escapeHtml(f.factValue)}</div>
+          <div class="mem-meta">conf=${f.confidence} · ${escapeHtml(f.source)}</div>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('memLoadBtn').addEventListener('click', () => {
+      loadMemoryFor(document.getElementById('memCaller').value.trim());
+    });
+
+    document.getElementById('memSaveBtn').addEventListener('click', async () => {
+      const caller = document.getElementById('memCaller').value.trim();
+      const fk = document.getElementById('memFactKey').value.trim();
+      const fv = document.getElementById('memFactValue').value.trim();
+      if (!caller || !fk || !fv) return alert('fill caller, key, value');
+      try {
+        await apiFetch(`${API_BASE}/api/dashboard/memory/${encodeURIComponent(caller)}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fact_key: fk, fact_value: fv, confidence: 0.95 }),
+        });
+        document.getElementById('memFactKey').value = '';
+        document.getElementById('memFactValue').value = '';
+        loadMemoryFor(caller);
+      } catch (e) { alert('error: ' + e.message); }
+    });
+
+    // Auto-refresh savings + wallet every 10s when their tab is visible
+    setInterval(() => {
+      const active = document.querySelector('.tab-trigger.active')?.dataset.tab;
+      if (active === 'savings') loadSavings();
+      if (active === 'wallet') loadWallet();
+    }, 10_000);
+
+    // Hook tab switches to lazy-load tab data
+    document.querySelectorAll('.tab-trigger').forEach(t => {
+      t.addEventListener('click', () => {
+        const target = t.dataset.tab;
+        if (target === 'savings') loadSavings();
+        if (target === 'wallet') loadWallet();
+      });
+    });
+
+    // ─── Hero / Buddy / Achievements / Heatmap / Events / Forecast ──────
+    async function loadHero() {
+      try {
+        const [buddy, ach, heatmap, events, forecast, savings] = await Promise.all([
+          apiFetch(`${API_BASE}/api/dashboard/buddy`).then(r => r.json()),
+          apiFetch(`${API_BASE}/api/dashboard/achievements`).then(r => r.json()),
+          apiFetch(`${API_BASE}/api/dashboard/heatmap?days=365`).then(r => r.json()),
+          apiFetch(`${API_BASE}/api/dashboard/events?limit=30`).then(r => r.json()),
+          apiFetch(`${API_BASE}/api/dashboard/forecast`).then(r => r.json()),
+          apiFetch(`${API_BASE}/api/dashboard/savings?hours=8760`).then(r => r.json()),
+        ]);
+        if (buddy.success) renderBuddy(buddy.data);
+        if (ach.success) renderAchievements(ach.data);
+        if (heatmap.success) renderHeatmap(heatmap.data);
+        if (events.success) renderEventsFeed(events.data);
+        if (forecast.success) renderForecast(forecast.data);
+        if (savings.success) renderHeroSavings(savings.data);
+      } catch (e) {
+        console.error('hero load failed', e);
+      }
+    }
+
+    function renderBuddy(b) {
+      const xpPercent = Math.min(100, (b.xp / b.xpForNextLevel) * 100);
+      document.getElementById('heroBuddy').innerHTML = `
+        <div>
+          <span class="buddy-name">${escapeHtml(b.name)}</span>
+          <span class="buddy-rarity ${b.rarity}">${b.rarity}</span>
+        </div>
+        <div class="buddy-meta">${escapeHtml(b.species)} · ${escapeHtml(b.stage)} · Lv.${b.level} · ${b.streakDays}d streak</div>
+        <div class="buddy-art">${b.asciiArt.map(escapeHtml).join('\n')}</div>
+        <div class="buddy-xp-bar"><div class="buddy-xp-fill" style="width:${xpPercent}%"></div></div>
+        <div class="buddy-xp-text"><span>XP ${b.xp.toLocaleString()}</span><span>Next: ${b.xpForNextLevel.toLocaleString()}</span></div>
+        <div class="buddy-speech buddy-mood-${b.mood}">${escapeHtml(b.speech)}</div>
+      `;
+    }
+
+    // Try to fetch external tool stats from localhost:3333 (legacy compat) (browser-side, not server-side)
+    // Returns null if no external tool runs there.
+    async function fetchExternalToolStats() {
+      try {
+        const ctrl = new AbortController();
+        setTimeout(() => ctrl.abort(), 1500);
+        const res = await fetch('http://localhost:3333/api/stats', { signal: ctrl.signal });
+        if (!res.ok) return null;
+        const stats = await res.json();
+        // The "tokens saved" calculation: input - output (compression delta) summed across commands
+        let saved = 0;
+        for (const v of Object.values(stats.commands || {})) {
+          saved += Math.max(0, (v.input_tokens || 0) - (v.output_tokens || 0));
+        }
+        return { saved, totalCommands: stats.total_commands || 0 };
+      } catch { return null; }
+    }
+
+    async function renderHeroSavings(d) {
+      const s = d.savings;
+      const c = s.comprehensive || {};
+      const gatewayTokens = s.totalTokensSaved || 0;
+      document.getElementById('heroTokensSaved').textContent = formatNumber(gatewayTokens);
+      document.getElementById('heroCostSaved').textContent = formatCost(s.totalCostSaved);
+      document.getElementById('heroCacheHits').textContent = s.totalHits;
+      document.getElementById('heroSavingsRate').textContent = `${s.hitRatePercent || 0}%`;
+
+      // Optional external-tool integration: pull from localhost:3333 if running
+      const externalTool = await fetchExternalToolStats();
+      const combined = gatewayTokens + (externalTool?.saved || 0);
+      document.getElementById('heroTokensSavedCombined').textContent = formatNumber(combined);
+      if (externalTool) {
+        document.getElementById('heroExternalToolRow').style.display = 'flex';
+        document.getElementById('heroExternalToolTokens').textContent = formatNumber(externalTool.saved);
+      } else {
+        document.getElementById('heroExternalToolRow').style.display = 'none';
+      }
+      document.getElementById('costWithout').textContent = formatCost(c.costWithoutGateway || 0);
+      document.getElementById('costWith').textContent = formatCost(c.costWithGateway || 0);
+      const saved = (c.costWithoutGateway || 0) - (c.costWithGateway || 0);
+      document.getElementById('costSavedLine').textContent = formatCost(saved);
+      document.getElementById('costSavedPercent').textContent = `${(c.effectiveSavingsPercent || 0).toFixed(1)}%`;
+
+      // 5-axis savings
+      const axes = [
+        { id: 'cache',              label: 'Cache',           icon: '⚡', cost: c.bySource?.cache?.cost ?? 0,            detail: `${c.bySource?.cache?.hits ?? 0} hits` },
+        { id: 'compression',        label: 'Compression',     icon: '🗜', cost: c.bySource?.compression?.cost ?? 0,      detail: `${formatNumber(c.bySource?.compression?.tokens ?? 0)} tokens` },
+        { id: 'subscriptionBridge', label: 'Sub. Bridges',    icon: '🌉', cost: c.bySource?.subscriptionBridge?.cost ?? 0, detail: `${c.bySource?.subscriptionBridge?.calls ?? 0} calls` },
+        { id: 'localRouting',       label: 'Local Models',    icon: '🏠', cost: c.bySource?.localRouting?.cost ?? 0,      detail: `${c.bySource?.localRouting?.calls ?? 0} calls` },
+        { id: 'raceMode',           label: 'Race Mode',       icon: '🏁', cost: c.bySource?.raceMode?.cost ?? 0,           detail: `${c.bySource?.raceMode?.calls ?? 0} races` },
+      ];
+      document.getElementById('savingsAxes').innerHTML = axes.map(a => `
+        <div class="axis">
+          <span class="axis-icon">${a.icon}</span>
+          <span class="axis-label">${a.label}</span>
+          <span class="axis-cost">${formatCost(a.cost)}</span>
+          <span class="axis-detail">${a.detail}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderAchievements(a) {
+      document.getElementById('achievementsProgress').textContent = `${a.unlocked.length}/${a.unlocked.length + a.locked.length} · ${a.progress}%`;
+      const all = [...a.unlocked.map(x => ({...x, unlocked: true})), ...a.locked.slice(0, 12).map(x => ({...x, unlocked: false}))];
+      document.getElementById('achievementsGrid').innerHTML = all.map(x => `
+        <div class="achievement ${x.unlocked ? 'unlocked' : 'locked'}">
+          <div class="ach-icon">${x.icon}</div>
+          <div class="ach-info">
+            <div class="ach-title">${escapeHtml(x.title)}</div>
+            <div class="ach-desc">${escapeHtml(x.description)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderHeatmap(cells) {
+      // Lay out cells column-major (Sun→Sat per week column, like GitHub)
+      // Total 365 days = ~52 weeks of 7 cells. Pad start so first cell aligns to Sunday.
+      if (!cells.length) { document.getElementById('heatmap').innerHTML = '<div class="empty-state">no activity yet</div>'; return; }
+      const first = new Date(cells[0].date);
+      const padDays = first.getUTCDay(); // 0=Sun, 6=Sat
+      const padded = Array(padDays).fill(null).concat(cells);
+      let maxStreak = 0;
+      let curStreak = 0;
+      for (const c of cells) {
+        if (c && c.count > 0) { curStreak++; if (curStreak > maxStreak) maxStreak = curStreak; }
+        else curStreak = 0;
+      }
+      // Latest streak from end
+      let endStreak = 0;
+      for (let i = cells.length - 1; i >= 0; i--) {
+        if (cells[i].count > 0) endStreak++; else break;
+      }
+      document.getElementById('streakBadge').textContent = endStreak;
+
+      document.getElementById('heatmap').innerHTML = padded.map(c => {
+        if (!c) return '<div class="heatmap-cell"></div>';
+        const title = `${c.date}: ${c.count} req · ${c.tokensSaved} saved`;
+        return `<div class="heatmap-cell l${c.level}" title="${title}"></div>`;
+      }).join('');
+    }
+
+    function renderEventsFeed(events) {
+      const el = document.getElementById('eventsFeed');
+      if (!events.length) { el.innerHTML = '<div class="empty-state">no events yet</div>'; return; }
+      el.innerHTML = events.map(e => `
+        <div class="event-row">
+          <span class="event-icon">${e.icon}</span>
+          <div class="event-body">
+            <span class="event-caller">${escapeHtml(e.caller)}</span> · ${escapeHtml(e.type)}
+            <div class="event-detail">${escapeHtml(e.detail)}</div>
+          </div>
+          <span class="event-time">${formatTime(e.ts)}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderForecast(f) {
+      const trendIcon = f.trend === 'up' ? '↗' : (f.trend === 'down' ? '↘' : '→');
+      document.getElementById('forecast').innerHTML = `
+        <div class="forecast-row"><span class="forecast-window">next 7 days</span><span class="forecast-amount">${formatCost(f.next7DaysSavings)}</span></div>
+        <div class="forecast-row"><span class="forecast-window">next 30 days</span><span class="forecast-amount">${formatCost(f.next30DaysSavings)}</span></div>
+        <div class="forecast-row"><span class="forecast-window">next 12 months</span><span class="forecast-amount">${formatCost(f.next365DaysSavings)}</span></div>
+        <div class="forecast-trend ${f.trend}">${trendIcon} trend ${f.trend} · daily avg ${formatCost(f.dailyAverage)} · ${f.basedOnDays}d data</div>
+      `;
+    }
+
+    function formatTime(iso) {
+      try {
+        const d = new Date(iso);
+        const now = new Date();
+        const diffMs = now - d;
+        if (diffMs < 60_000) return 'just now';
+        if (diffMs < 3600_000) return `${Math.floor(diffMs/60000)}m ago`;
+        if (diffMs < 86400_000) return `${Math.floor(diffMs/3600000)}h ago`;
+        return d.toISOString().split('T')[0];
+      } catch { return iso; }
+    }
+
+    // ─── Simple Mode application ─────────────────────────────────────────
+    // Hide tabs / sections / content based on the user's UI preferences.
+    // Defaults to Simple Mode = ON for users with few configured subscriptions.
+    const ADVANCED_TABS_TO_HIDE_IN_SIMPLE = ['providers', 'memory', 'leaderboard', 'share', 'report'];
+
+    function applyUiMode(ui) {
+      const simpleMode = !!ui?.simpleMode;
+      const hideEmpty  = !!ui?.hideEmptyProviders;
+      const tooltips   = !!ui?.showTooltips;
+
+      // 1) Hide advanced tabs in Simple Mode
+      document.querySelectorAll('.tab-trigger').forEach(t => {
+        const isAdvanced = ADVANCED_TABS_TO_HIDE_IN_SIMPLE.includes(t.dataset.tab);
+        t.style.display = (simpleMode && isAdvanced) ? 'none' : '';
+      });
+
+      // 2) Toggle tooltip attribute
+      document.querySelectorAll('.tab-trigger').forEach(t => {
+        if (!tooltips && t.title) { t.dataset.savedTitle = t.title; t.title = ''; }
+        else if (tooltips && t.dataset.savedTitle) { t.title = t.dataset.savedTitle; }
+      });
+
+      // 3) Body class — used by other CSS-driven simplifications
+      document.body.classList.toggle('simple-mode', simpleMode);
+      document.body.classList.toggle('hide-empty-providers', hideEmpty);
+
+      // 4) If currently on a hidden tab, switch to overview
+      const activeTab = document.querySelector('.tab-trigger.active')?.dataset.tab;
+      if (simpleMode && ADVANCED_TABS_TO_HIDE_IN_SIMPLE.includes(activeTab)) {
+        const overview = document.querySelector('.tab-trigger[data-tab="overview"]');
+        if (overview) overview.click();
+      }
+    }
+
+    // ─── Knowledge Graph (force-directed SVG, no D3 dep) ──────────────
+    async function loadMemoryGraph() {
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/memory-graph`);
+        const p = await res.json();
+        if (!p.success) throw new Error(p.error || 'graph failed');
+        renderMemoryGraph(p.data);
+      } catch (e) {
+        document.getElementById('memoryGraph').innerHTML = `<text x="20" y="40" fill="#888">error: ${e.message}</text>`;
+      }
+    }
+
+    function renderMemoryGraph(g) {
+      const svg = document.getElementById('memoryGraph');
+      if (!g.nodes.length) {
+        svg.innerHTML = '<text x="440" y="230" text-anchor="middle" font-family="JetBrains Mono" font-size="14" fill="#667684">No facts stored yet — try `remember that …` in any caller</text>';
+        return;
+      }
+
+      // Simple force-directed layout: 60 iterations of attraction along edges + repulsion between all nodes
+      const W = 880, H = 460;
+      const nodes = g.nodes.map((n, i) => ({
+        ...n,
+        x: W/2 + Math.cos(i * 2 * Math.PI / g.nodes.length) * 200,
+        y: H/2 + Math.sin(i * 2 * Math.PI / g.nodes.length) * 150,
+        r: n.type === 'caller' ? 14 : (n.type === 'fact-key' ? 9 : 6),
+      }));
+      const idx = new Map(nodes.map(n => [n.id, n]));
+
+      for (let it = 0; it < 80; it++) {
+        // repulsion
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i+1; j < nodes.length; j++) {
+            const a = nodes[i], b = nodes[j];
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const d2 = dx*dx + dy*dy + 1;
+            const f = 1500 / d2;
+            const fx = (dx / Math.sqrt(d2)) * f;
+            const fy = (dy / Math.sqrt(d2)) * f;
+            a.x -= fx; a.y -= fy;
+            b.x += fx; b.y += fy;
+          }
+        }
+        // attraction along edges
+        for (const e of g.edges) {
+          const a = idx.get(e.source), b = idx.get(e.target);
+          if (!a || !b) continue;
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const f = 0.04;
+          a.x += dx * f; a.y += dy * f;
+          b.x -= dx * f; b.y -= dy * f;
+        }
+        // boundary
+        for (const n of nodes) {
+          n.x = Math.max(20, Math.min(W-20, n.x));
+          n.y = Math.max(20, Math.min(H-20, n.y));
+        }
+      }
+
+      // Render edges + nodes
+      const edgeSvg = g.edges.map(e => {
+        const a = idx.get(e.source), b = idx.get(e.target);
+        if (!a || !b) return '';
+        return `<path class="edge" d="M ${a.x.toFixed(1)} ${a.y.toFixed(1)} L ${b.x.toFixed(1)} ${b.y.toFixed(1)}"/>`;
+      }).join('');
+
+      const nodeSvg = nodes.map(n => {
+        const cls = n.type === 'caller' ? 'node-caller' : (n.type === 'fact-key' ? 'node-fact-key' : 'node-fact-value');
+        const labelOffset = n.r + 12;
+        return `
+          <g class="node">
+            <title>${escapeHtml(n.label)} (${n.type})</title>
+            <circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${n.r}" class="${cls}"/>
+            ${n.type === 'caller' ? `<text class="label" x="${n.x.toFixed(1)}" y="${(n.y+labelOffset).toFixed(1)}" text-anchor="middle">${escapeHtml(n.label)}</text>` : ''}
+          </g>`;
+      }).join('');
+
+      svg.innerHTML = edgeSvg + nodeSvg;
+    }
+
+    // ─── Race Leaderboard ───────────────────────────────────────────────
+    async function loadLeaderboard() {
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/race-leaderboard?days=7`);
+        const p = await res.json();
+        if (!p.success) throw new Error(p.error || 'leaderboard failed');
+        renderLeaderboard(p.data);
+      } catch (e) {
+        document.getElementById('leaderboardTable').innerHTML = `<div class="empty-state">error: ${e.message}</div>`;
+      }
+    }
+
+    function renderLeaderboard(d) {
+      document.getElementById('leaderboardTabBadge').textContent = d.totalRaces > 0 ? `${d.totalRaces}` : '·';
+
+      // Podium
+      const top3 = d.entries.slice(0, 3);
+      const podium = document.getElementById('leaderboardPodium');
+      if (top3.length === 0) {
+        podium.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">no races run yet — POST /v1/race to start competing models</div>';
+      } else {
+        const slots = [];
+        const findByBadge = (badge) => top3.find(e => e.badge === badge);
+        const gold = findByBadge('gold');
+        const silver = findByBadge('silver');
+        const bronze = findByBadge('bronze');
+        if (silver) slots.push(`<div class="podium-step silver"><div class="podium-medal">🥈</div><div class="podium-rank">2nd</div><div class="podium-model">${escapeHtml(silver.model)}</div><div class="podium-stat">${silver.avgLatencyMs}ms · ${(silver.winRate*100).toFixed(0)}% win</div></div>`);
+        else slots.push('<div></div>');
+        if (gold)   slots.push(`<div class="podium-step gold"><div class="podium-medal">🥇</div><div class="podium-rank">1st</div><div class="podium-model">${escapeHtml(gold.model)}</div><div class="podium-stat">${gold.avgLatencyMs}ms · ${(gold.winRate*100).toFixed(0)}% win</div></div>`);
+        else slots.push('<div></div>');
+        if (bronze) slots.push(`<div class="podium-step bronze"><div class="podium-medal">🥉</div><div class="podium-rank">3rd</div><div class="podium-model">${escapeHtml(bronze.model)}</div><div class="podium-stat">${bronze.avgLatencyMs}ms · ${(bronze.winRate*100).toFixed(0)}% win</div></div>`);
+        else slots.push('<div></div>');
+        podium.innerHTML = slots.join('');
+      }
+
+      // Full table
+      const tbl = document.getElementById('leaderboardTable');
+      const head = `
+        <div class="lb-row head">
+          <div>#</div><div>model</div><div class="lb-num">latency</div>
+          <div class="lb-num">speed</div><div class="lb-num">wins</div><div class="lb-num">races</div>
+        </div>`;
+      const rows = d.entries.map(e => `
+        <div class="lb-row ${e.badge ? 'medal-' + e.badge : ''}">
+          <div class="lb-pos">${e.rankPosition}</div>
+          <div>${escapeHtml(e.model)}</div>
+          <div class="lb-num">${e.avgLatencyMs}ms</div>
+          <div class="lb-num">${(e.speedRate*100).toFixed(0)}%</div>
+          <div class="lb-num">${e.selectedCount}</div>
+          <div class="lb-num">${e.participations}</div>
+        </div>
+      `).join('');
+      tbl.innerHTML = head + (d.entries.length === 0 ? '<div class="empty-state">no race results yet</div>' : rows);
+    }
+
+    // ─── Per-Caller Deep Dive ──────────────────────────────────────────
+    async function openCallerDeepDive(caller) {
+      document.getElementById('callerModal').classList.add('open');
+      document.getElementById('callerModalTitle').textContent = caller;
+      document.getElementById('callerModalBody').innerHTML = '<div class="loading">loading</div>';
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/caller/${encodeURIComponent(caller)}`);
+        const p = await res.json();
+        if (!p.success) throw new Error(p.error || 'load failed');
+        renderCallerDeepDive(p.data);
+      } catch (e) {
+        document.getElementById('callerModalBody').innerHTML = `<div class="empty-state">error: ${e.message}</div>`;
+      }
+    }
+
+    function renderCallerDeepDive(d) {
+      const maxHourly = Math.max(1, ...d.hourlyHeatmap.map(h => h.count));
+      document.getElementById('callerModalBody').innerHTML = `
+        <div class="caller-summary">
+          <div><div class="label">requests</div><div class="val">${formatNumber(d.totalRequests)}</div></div>
+          <div><div class="label">success rate</div><div class="val">${(d.successRate*100).toFixed(1)}%</div></div>
+          <div><div class="label">avg latency</div><div class="val">${d.avgLatencyMs}ms</div></div>
+          <div><div class="label">p50 / p95</div><div class="val">${d.latencyP50}/${d.latencyP95}ms</div></div>
+          <div><div class="label">tokens (in→out)</div><div class="val">${formatNumber(d.totalTokensIn)} → ${formatNumber(d.totalTokensOut)}</div></div>
+          <div><div class="label">total cost</div><div class="val">${formatCost(d.totalCost)}</div></div>
+          <div><div class="label">cache hits</div><div class="val">${d.cacheHits}</div></div>
+          <div><div class="label">tokens saved</div><div class="val">${formatNumber(d.cacheTokensSaved)}</div></div>
+        </div>
+
+        <h2 class="h-section" style="margin-top:18px;">Activity by hour <span class="h-meta">last 7 days, UTC</span></h2>
+        <div class="caller-hour-bars">
+          ${d.hourlyHeatmap.map(h => `<div class="bar" title="${h.hour}:00 — ${h.count} req" style="height:${(h.count/maxHourly*100).toFixed(0)}%;"></div>`).join('')}
+        </div>
+        <div class="caller-hour-axis">
+          ${d.hourlyHeatmap.map(h => h.hour % 4 === 0 ? `<span>${h.hour}h</span>` : '<span></span>').join('')}
+        </div>
+
+        <h2 class="h-section" style="margin-top:18px;">Top Models</h2>
+        <div class="chip-grid">
+          ${d.topModels.map(m => `
+            <div class="chip" style="cursor:default;">
+              <div class="chip-name">${escapeHtml(m.model)}</div>
+              <div class="chip-meta"><span class="num">${m.count}</span> · ${m.share}%</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <h2 class="h-section" style="margin-top:18px;">Recent Requests</h2>
+        <div class="req-table" style="font-size: 0.74rem;">
+          <div class="req-row head">
+            <div>id</div><div>model</div><div>status</div><div>tok in</div><div>tok out</div><div>cost</div><div>latency</div>
+          </div>
+          ${d.recentRequests.map(r => `
+            <div class="req-row body">
+              <div title="${r.request_id}">${r.request_id.substring(0,12)}…</div>
+              <div>${escapeHtml(r.model)}</div>
+              <div><span class="req-status ${r.status}">${r.status}</span></div>
+              <div>${r.tokens_in}</div><div>${r.tokens_out}</div>
+              <div>${formatCost(r.cost_usd)}</div><div>${r.latency_ms}ms</div>
+            </div>
+          `).join('')}
+        </div>
+
+        ${d.storedFacts.length ? `
+        <h2 class="h-section" style="margin-top:18px;">Stored Facts</h2>
+        <div class="mem-list">
+          ${d.storedFacts.map(f => `
+            <div class="mem-row">
+              <div class="mem-key">${escapeHtml(f.key)}</div>
+              <div class="mem-val">${escapeHtml(f.value)}</div>
+              <div class="mem-meta">conf=${f.confidence} · ${escapeHtml(f.source)}</div>
+            </div>
+          `).join('')}
+        </div>` : ''}
+      `;
+    }
+
+    function closeCallerModal() { document.getElementById('callerModal').classList.remove('open'); }
+    document.getElementById('callerModalClose').addEventListener('click', closeCallerModal);
+    document.getElementById('callerModal').addEventListener('click', (e) => { if (e.target.id === 'callerModal') closeCallerModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCallerModal(); });
+
+    // Wire click on caller chips (delegated event)
+    document.addEventListener('click', (e) => {
+      const chip = e.target.closest('#topCallers .chip, #topSavingCallers .chip');
+      if (chip) {
+        const name = chip.querySelector('.chip-name')?.textContent?.trim();
+        if (name) openCallerDeepDive(name);
+      }
+    });
+
+    // ─── Share Card ─────────────────────────────────────────────────────
+    function buildShareCardUrl() {
+      const period = document.getElementById('shareCardPeriod').value;
+      const theme = document.getElementById('shareCardTheme').value;
+      return `${API_BASE || location.origin}/api/dashboard/share-card?period=${period}&theme=${theme}`;
+    }
+    function refreshShareCard() {
+      const url = buildShareCardUrl();
+      document.getElementById('shareCardImg').src = url + '&_t=' + Date.now();
+      document.getElementById('shareCardUrl').textContent = url;
+    }
+    document.getElementById('shareCardRefresh').addEventListener('click', refreshShareCard);
+    document.getElementById('shareCardPeriod').addEventListener('change', refreshShareCard);
+    document.getElementById('shareCardTheme').addEventListener('change', refreshShareCard);
+    document.getElementById('shareCardCopyUrl').addEventListener('click', async () => {
+      const url = buildShareCardUrl();
+      try { await navigator.clipboard.writeText(url); document.getElementById('shareCardCopyUrl').textContent = '✓ copied'; setTimeout(() => { document.getElementById('shareCardCopyUrl').textContent = 'copy URL'; }, 1500); }
+      catch { alert('clipboard write failed — URL: ' + url); }
+    });
+    document.getElementById('shareCardDownload').addEventListener('click', async () => {
+      const url = buildShareCardUrl();
+      const r = await fetch(url);
+      const svg = await r.text();
+      const blob = new Blob([svg], { type: 'image/svg+xml' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `llm-gateway-${document.getElementById('shareCardPeriod').value}-${document.getElementById('shareCardTheme').value}.svg`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    // ─── Monthly Report ─────────────────────────────────────────────────
+    document.getElementById('reportOpen').addEventListener('click', () => {
+      const year = document.getElementById('reportYear').value;
+      const month = document.getElementById('reportMonth').value;
+      const url = `${API_BASE || location.origin}/api/dashboard/report?year=${year}&month=${month}`;
+      // Open in a new tab; report HTML has its own print-friendly styles
+      window.open(url, '_blank');
+    });
+    // Pre-fill current year/month
+    (() => {
+      const now = new Date();
+      document.getElementById('reportYear').value = now.getUTCFullYear();
+      document.getElementById('reportMonth').value = now.getUTCMonth() + 1;
+    })();
+
+    // Hook tab switches to load data lazily
+    document.querySelectorAll('.tab-trigger').forEach(t => {
+      t.addEventListener('click', () => {
+        const target = t.dataset.tab;
+        if (target === 'memory') loadMemoryGraph();
+        if (target === 'leaderboard') loadLeaderboard();
+        if (target === 'share') refreshShareCard();
+        if (target === 'api') refreshApiBridgeStatus();
+      });
+    });
+
+    // ─── API Tab — copy buttons, try-it-out, bridge status ────────────────
+    function copyToClipboard(text) {
+      if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      return Promise.resolve();
+    }
+    document.querySelectorAll('.api-copy').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const targetId = btn.dataset.target;
+        const snippet = document.getElementById(targetId)?.innerText || '';
+        await copyToClipboard(snippet);
+        const orig = btn.textContent;
+        btn.textContent = 'copied ✓';
+        setTimeout(() => { btn.textContent = orig; }, 1400);
+      });
+    });
+
+    document.getElementById('apiTryRun')?.addEventListener('click', async () => {
+      const endpoint = document.getElementById('apiTryEndpoint').value;
+      const model = document.getElementById('apiTryModel').value || 'claude-sonnet-4.6';
+      const prompt = document.getElementById('apiTryPrompt').value || '';
+      const status = document.getElementById('apiTryStatus');
+      const meta = document.getElementById('apiTryMeta');
+      const wrap = document.getElementById('apiTryResultWrap');
+      const out = document.getElementById('apiTryResult');
+      if (!prompt.trim()) { status.textContent = 'add a prompt first'; return; }
+
+      let body;
+      if (endpoint === '/v1/completion') {
+        body = { caller: 'dashboard-tryout', task_type: 'generic_qa', input: prompt, options: { compression: { enabled: true, mode: 'auto' } } };
+      } else if (endpoint === '/v1/chat/completions') {
+        body = { model, messages: [{ role: 'user', content: prompt }] };
+      } else {
+        body = { model, messages: [{ role: 'user', content: prompt }], max_tokens: 1024 };
+      }
+
+      status.textContent = 'sending…';
+      const t0 = performance.now();
+      try {
+        const res = await fetch((API_BASE || location.origin) + endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const dtMs = Math.round(performance.now() - t0);
+        const json = await res.json().catch(() => ({}));
+        status.textContent = `${res.status} ${res.statusText} · ${dtMs} ms`;
+        const c = json?.compression || (json?.metadata?.compression) || null;
+        if (c) {
+          meta.textContent = `compression: applied=${c.applied} · method=${c.method} · before=${c.tokens_before} after=${c.tokens_after} saved=${c.tokens_saved}`;
+        } else {
+          meta.textContent = 'no compression metadata in response';
+        }
+        out.textContent = JSON.stringify(json, null, 2);
+        wrap.style.display = 'block';
+      } catch (err) {
+        status.textContent = 'error: ' + (err.message || err);
+      }
+    });
+
+    async function refreshApiBridgeStatus() {
+      try {
+        const res = await fetch((API_BASE || location.origin) + '/api/dashboard/providers');
+        if (!res.ok) return;
+        const json = await res.json();
+        const allProviders = [
+          ...((json?.data?.grouped?.subscription) || []),
+          ...((json?.data?.grouped?.local) || []),
+        ];
+        document.querySelectorAll('.api-bridge-status').forEach(cell => {
+          const name = cell.dataset.bridge;
+          const p = allProviders.find(x => x.name === name);
+          if (!p) { cell.textContent = 'unknown'; cell.classList.add('err'); return; }
+          if (p.enabled && p.status === 'configured') {
+            cell.textContent = '✓ online';
+            cell.classList.add('ok');
+          } else {
+            cell.textContent = p.status || 'disabled';
+            cell.classList.add('err');
+          }
+        });
+      } catch {
+        /* silent */
+      }
+    }
+
+    // ─── Init ────────────────────────────────────────────────────────────
+    async function init() {
+      await checkHealth();
+      await loadMetrics();
+      await loadRequests();
+      await loadProviders();
+      await loadSubscriptions();
+      await loadSavings();
+      await loadWallet();
+      await loadHero();
+
+      try {
+        const res = await apiFetch(`${API_BASE}/api/dashboard/settings`);
+        const payload = await res.json();
+        if (payload.success) {
+          document.getElementById('routingModeBadge').textContent = payload.data.routingMode;
+          // Apply UI mode (Simple Mode etc.) immediately on load
+          applyUiMode(payload.data.ui ?? { simpleMode: false, hideEmptyProviders: true, showTooltips: true });
+        }
+      } catch (e) { /* non-fatal */ }
+
+      setupPolling();
+      setInterval(checkHealth, HEALTH_CHECK_INTERVAL);
+      setInterval(loadSubscriptions, 30000);
+      setInterval(loadHero, 30000); // refresh buddy / events / forecast every 30s
+    }
+
+    init();
+  </script>
+</body>
+</html>

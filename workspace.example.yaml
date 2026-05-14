@@ -1,0 +1,44 @@
+# ─── Workspace Preset (example) ──────────────────────────────────────────
+# Copy to `workspace.yaml` in the repo root or set WORKSPACE_FILE=/path/to/it.
+# The gateway picks this up at boot and applies the defaults / overrides.
+# Env variables always win over preset values — the preset is a fallback.
+
+name: "my-team-workspace"
+description: "Default config for a small team using the Adaptive LLM Gateway"
+
+# ─── Defaults applied as env-var fallbacks ──────────────────────────────
+defaults:
+  compression_mode: auto         # off | auto | aggressive
+  injection_defense: warn        # off | warn | block | llm_judge
+  pii_redaction: cloud_only      # off | cloud_only | always
+  output_defense: tag            # off | tag | cut
+  semantic_cache: true
+
+# ─── Routing overrides per task_type ────────────────────────────────────
+routing_overrides:
+  generic_qa:
+    model: qwen2.5:14b
+    tier: medium
+  code_review:
+    model: qwen2.5-coder:7b-instruct
+    tier: fast
+  code_generate:
+    model: qwen2.5:32b
+    tier: large
+
+# ─── Per-caller config ──────────────────────────────────────────────────
+callers:
+  chat-frontend:
+    rate_limit_per_minute: 120
+    allowed_task_types: [generic_qa, generic_summarize, generic_translate]
+    compression_mode: auto
+  background-batch:
+    rate_limit_per_minute: 1000
+    compression_mode: aggressive
+
+# ─── Provider whitelist (auto-discovery still scans, but only these route) ─
+# Leave empty/omit to use all detected providers.
+providers_enabled:
+  - ollama
+  - claude-bridge
+  - groq
