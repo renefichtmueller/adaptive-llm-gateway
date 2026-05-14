@@ -1,0 +1,12 @@
+{
+  "name": "@llm-gateway/client",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.6"
+  }
+}

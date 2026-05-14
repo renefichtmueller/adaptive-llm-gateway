@@ -1,0 +1,37 @@
+{
+  "name": "@llm-gateway/learning-integration",
+  "version": "1.0.0",
+  "description": "Per-agent learning metrics and feedback integration for LLM Gateway",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./metrics": "./dist/metrics.js",
+    "./feedback": "./dist/feedback.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@llm-gateway/client": "*",
+    "@llm-gateway/learning": "*",
+    "postgres": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "keywords": [
+    "learning",
+    "metrics",
+    "feedback",
+    "per-agent",
+    "llm",
+    "gateway"
+  ],
+  "license": "MIT",
+  "author": "Adaptive LLM Gateway maintainers"
+}

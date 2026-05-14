@@ -1,0 +1,51 @@
+# ─── Dependencies + build ─────────────────────────────────────────────
+node_modules/
+dist/
+.next/
+build/
+*.tsbuildinfo
+
+# ─── Secrets — NEVER commit any of these ─────────────────────────────
+.env
+.env.local
+.env.*.local
+*.local
+.dev.vars
+.claude/.credentials.json
+wrangler.toml
+
+# ─── PM2 / ecosystem with real values ────────────────────────────────
+ecosystem.config.cjs
+ecosystem.config.js
+deploy/ecosystem.config.cjs
+deploy/ecosystem.config.js
+
+# ─── Logs ────────────────────────────────────────────────────────────
+*.log
+logs/
+pm2-logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── OS / editor ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ─── Local data + dumps ──────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.dump
+data/
+local/
+
+# ─── Training data (firm-internal, never publish) ────────────────────
+packages/fine-tuner/
+*.jsonl
+
+# ─── Python build artifacts ──────────────────────────────────────────
+__pycache__/
+*.pyc
