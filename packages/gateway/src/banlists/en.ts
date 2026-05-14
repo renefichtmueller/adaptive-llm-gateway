@@ -1,0 +1,106 @@
+// English ban list — marketing speak, AI clichés, and overused phrases
+// Category tags: 'marketing' | 'ai_tell' | 'cliche' | 'filler'
+
+export interface BanEntry {
+  term: string;
+  category: 'marketing' | 'ai_tell' | 'cliche' | 'filler';
+  wholeWord: boolean;
+}
+
+export const EN_BANLIST: BanEntry[] = [
+  // Marketing buzzwords
+  { term: 'leverage', category: 'marketing', wholeWord: true },
+  { term: 'cutting-edge', category: 'marketing', wholeWord: false },
+  { term: 'innovative', category: 'marketing', wholeWord: true },
+  { term: 'game-changer', category: 'marketing', wholeWord: false },
+  { term: 'game changer', category: 'marketing', wholeWord: false },
+  { term: 'disruptive', category: 'marketing', wholeWord: true },
+  { term: 'synergy', category: 'marketing', wholeWord: true },
+  { term: 'synergies', category: 'marketing', wholeWord: true },
+  { term: 'paradigm shift', category: 'marketing', wholeWord: false },
+  { term: 'holistic', category: 'marketing', wholeWord: true },
+  { term: 'seamless', category: 'marketing', wholeWord: true },
+  { term: 'robust', category: 'marketing', wholeWord: true },
+  { term: 'scalable', category: 'marketing', wholeWord: true },
+  { term: 'best-in-class', category: 'marketing', wholeWord: false },
+  { term: 'world-class', category: 'marketing', wholeWord: false },
+  { term: 'transformative', category: 'marketing', wholeWord: true },
+  { term: 'empower', category: 'marketing', wholeWord: true },
+  { term: 'empowers', category: 'marketing', wholeWord: true },
+  { term: 'empowering', category: 'marketing', wholeWord: true },
+  { term: 'unlock', category: 'marketing', wholeWord: true },
+  { term: 'unlocks', category: 'marketing', wholeWord: true },
+  { term: 'unlocking', category: 'marketing', wholeWord: true },
+  { term: 'reimagine', category: 'marketing', wholeWord: true },
+  { term: 'revolutionize', category: 'marketing', wholeWord: true },
+  { term: 'revolutionizing', category: 'marketing', wholeWord: true },
+  { term: 'elevate', category: 'marketing', wholeWord: true },
+  { term: 'streamline', category: 'marketing', wholeWord: true },
+  { term: 'harness', category: 'marketing', wholeWord: true },
+  { term: 'ecosystem', category: 'marketing', wholeWord: true },
+  { term: 'next-generation', category: 'marketing', wholeWord: false },
+  { term: 'next generation', category: 'marketing', wholeWord: false },
+  { term: 'state-of-the-art', category: 'marketing', wholeWord: false },
+  { term: 'state of the art', category: 'marketing', wholeWord: false },
+  { term: 'best practices', category: 'marketing', wholeWord: false },
+  { term: 'thought leader', category: 'marketing', wholeWord: false },
+  { term: 'thought leadership', category: 'marketing', wholeWord: false },
+  { term: 'value proposition', category: 'marketing', wholeWord: false },
+  { term: 'competitive advantage', category: 'marketing', wholeWord: false },
+  { term: 'bleeding edge', category: 'marketing', wholeWord: false },
+  { term: 'move the needle', category: 'marketing', wholeWord: false },
+  { term: 'low-hanging fruit', category: 'marketing', wholeWord: false },
+  { term: 'circle back', category: 'marketing', wholeWord: false },
+
+  // AI tell-tales
+  { term: 'delve', category: 'ai_tell', wholeWord: true },
+  { term: 'delves', category: 'ai_tell', wholeWord: true },
+  { term: 'delving', category: 'ai_tell', wholeWord: true },
+  { term: 'crucial', category: 'ai_tell', wholeWord: true },
+  { term: 'vital', category: 'ai_tell', wholeWord: true },
+  { term: 'it\'s worth noting', category: 'ai_tell', wholeWord: false },
+  { term: 'it is worth noting', category: 'ai_tell', wholeWord: false },
+  { term: 'having said that', category: 'ai_tell', wholeWord: false },
+  { term: 'at the end of the day', category: 'ai_tell', wholeWord: false },
+  { term: 'dive into', category: 'ai_tell', wholeWord: false },
+  { term: 'dive deep', category: 'ai_tell', wholeWord: false },
+  { term: 'let\'s explore', category: 'ai_tell', wholeWord: false },
+  { term: "let's unpack", category: 'ai_tell', wholeWord: false },
+  { term: 'it\'s important to note', category: 'ai_tell', wholeWord: false },
+  { term: 'it is important to note', category: 'ai_tell', wholeWord: false },
+  { term: 'first and foremost', category: 'ai_tell', wholeWord: false },
+  { term: 'last but not least', category: 'ai_tell', wholeWord: false },
+  { term: 'as an AI', category: 'ai_tell', wholeWord: false },
+  { term: 'as a language model', category: 'ai_tell', wholeWord: false },
+  { term: 'I cannot provide', category: 'ai_tell', wholeWord: false },
+  { term: 'I\'m unable to', category: 'ai_tell', wholeWord: false },
+
+  // Clichés
+  { term: 'journey', category: 'cliche', wholeWord: true },
+  { term: 'In today\'s fast-paced', category: 'cliche', wholeWord: false },
+  { term: 'In today\'s rapidly evolving', category: 'cliche', wholeWord: false },
+  { term: 'As we navigate', category: 'cliche', wholeWord: false },
+  { term: 'In conclusion', category: 'cliche', wholeWord: false },
+  { term: 'To summarize', category: 'cliche', wholeWord: false },
+  { term: 'In summary', category: 'cliche', wholeWord: false },
+  { term: 'The bottom line', category: 'cliche', wholeWord: false },
+  { term: 'At its core', category: 'cliche', wholeWord: false },
+  { term: 'At the forefront', category: 'cliche', wholeWord: false },
+  { term: 'In the realm of', category: 'cliche', wholeWord: false },
+  { term: 'In the ever-changing', category: 'cliche', wholeWord: false },
+  { term: 'the landscape of', category: 'cliche', wholeWord: false },
+
+  // Filler
+  { term: 'simply put', category: 'filler', wholeWord: false },
+  { term: 'needless to say', category: 'filler', wholeWord: false },
+  { term: 'of course', category: 'filler', wholeWord: false },
+  { term: 'obviously', category: 'filler', wholeWord: true },
+  { term: 'clearly', category: 'filler', wholeWord: true },
+  { term: 'certainly', category: 'filler', wholeWord: true },
+  { term: 'absolutely', category: 'filler', wholeWord: true },
+  { term: 'undoubtedly', category: 'filler', wholeWord: true },
+  { term: 'essentially', category: 'filler', wholeWord: true },
+  { term: 'basically', category: 'filler', wholeWord: true },
+];
+
+export const EN_TERMS_SET: Set<string> = new Set(EN_BANLIST.map((e) => e.term.toLowerCase()));

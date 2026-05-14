@@ -1,0 +1,37 @@
+{
+  "name": "@llm-gateway/codex-lsp-adapter",
+  "version": "1.0.0",
+  "description": "Language Server Protocol adapter for Codex/Copilot integration with LLM Gateway",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "codex-lsp": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@llm-gateway/client": "*",
+    "vscode-jsonrpc": "^8.0.0",
+    "vscode-languageserver": "^9.0.0",
+    "vscode-languageserver-protocol": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "keywords": [
+    "lsp",
+    "language-server",
+    "copilot",
+    "codex",
+    "llm",
+    "gateway"
+  ],
+  "license": "MIT",
+  "author": "Adaptive LLM Gateway maintainers"
+}

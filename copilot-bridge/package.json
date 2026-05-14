@@ -1,0 +1,30 @@
+{
+  "name": "copilot-bridge",
+  "version": "1.0.0",
+  "description": "GitHub Copilot API bridge for LLM Gateway integration",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "pm2": "pm2 start server.js --name copilot-bridge",
+    "auth": "npx copilot-api@latest auth",
+    "debug": "npx copilot-api@latest debug --json"
+  },
+  "keywords": [
+    "github",
+    "copilot",
+    "api",
+    "bridge",
+    "llm",
+    "openai-compatible"
+  ],
+  "author": "Rene Fichtmüller",
+  "license": "MIT",
+  "dependencies": {
+    "copilot-api": "^0.7.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

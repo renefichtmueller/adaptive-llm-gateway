@@ -1,0 +1,23 @@
+{
+  "name": "llm-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/gateway",
+    "build": "npm run build --workspace=packages/gateway",
+    "start": "npm run start --workspace=packages/gateway",
+    "learning": "npm run start --workspace=packages/learning",
+    "install:all": "npm install",
+    "test": "vitest",
+    "db:migrate": "bash scripts/init-db.sh",
+    "models:pull": "bash scripts/pull-models.sh",
+    "ctx-health": "npm run start --workspace=packages/ctx-health",
+    "ctx-health:dev": "npm run dev --workspace=packages/ctx-health"
+  },
+  "dependencies": {
+    "jose": "^6.2.2"
+  }
+}
