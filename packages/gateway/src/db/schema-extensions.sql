@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS compression_summary (
 -- Table: Cost alerts configuration (per user/project)
 CREATE TABLE IF NOT EXISTS cost_alert_config (
   id SERIAL PRIMARY KEY,
-  user_id VARCHAR(100),      -- 'rene' or 'erik'
+  user_id VARCHAR(100),      -- 'user1' or 'user2'
   project VARCHAR(100),      -- NULL = global threshold
   alert_type VARCHAR(50),    -- 'compression_below', 'weekly_budget', 'external_api', 'cost_spike'
   threshold DECIMAL(8,2),    -- Percentage or absolute USD

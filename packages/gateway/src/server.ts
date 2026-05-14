@@ -12,6 +12,13 @@ import { dashboardRoute } from './routes/dashboard.js';
 import { streamRoute } from './routes/stream.js';
 import { learningInsightsRoute } from './routes/learning-insights.js';
 import { embeddingsRoute } from './routes/embeddings.js';
+import { replayRoute } from './routes/replay.js';
+import { audioRoute } from './routes/audio.js';
+import { mcpRoute } from './modules/mcp-server.js';
+import { loadWorkspacePreset, applyWorkspaceDefaults } from './modules/workspace-presets.js';
+import { loadPlugins } from './modules/plugin-system.js';
+import { ingestPeerStats, scheduleFederationPublisher, buildStats } from './modules/federated-stats.js';
+import { scheduleAdaptiveLearner, getAllRecommendations } from './modules/adaptive-routing.js';
 import { staticRoute } from './routes/static.js';
 import { getPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
@@ -118,6 +125,14 @@ async function buildServer() {
 
   await server.register(completionRoute, { prefix: '/v1' });
   await server.register(embeddingsRoute, { prefix: '/v1' });
+  await server.register(replayRoute, { prefix: '/v1' });
+  await server.register(audioRoute, { prefix: '/v1' });
+  await server.register(mcpRoute);
+  // Federation ingest endpoint (opt-in)
+  server.post('/v1/federation/ingest', async (request, reply) => {
+    const result = ingestPeerStats(request.body as never);
+    return reply.send({ success: true, ...result });
+  });
   await server.register(batchRoute, { prefix: '/v1' });
   await server.register(classifyRoute, { prefix: '/v1' });
   await server.register(reviewRoute, { prefix: '/v1' });
@@ -196,11 +211,47 @@ async function main() {
     } catch (pgErr) {
       logger.warn({ pgErr }, 'PgBoss init failed - continuing without queue');
     }
+    // Workspace preset (apply env defaults from workspace.yaml if present)
+    try {
+      const preset = await loadWorkspacePreset();
+      if (preset) applyWorkspaceDefaults(preset);
+    } catch (err) {
+      logger.warn({ err }, 'Workspace preset load failed (non-fatal)');
+    }
+
+    // Plugin system (load pre/post hooks from PLUGINS_DIR)
+    try {
+      await loadPlugins();
+    } catch (err) {
+      logger.warn({ err }, 'Plugin loading failed (non-fatal)');
+    }
+
     scheduleLearningCycles();
     await server.listen({ port, host });
     logger.info({ port, host }, 'LLM Gateway started');
+
     // Auto-spawn detected subscription bridges if AUTO_SPAWN_BRIDGES=1
     void autoSpawnOnBoot();
+
+    // Adaptive routing learner (cost-aware recommendations from llm_calls)
+    try {
+      const pool = getPool();
+      scheduleAdaptiveLearner(pool);
+    } catch (err) {
+      logger.warn({ err }, 'Adaptive learner scheduling failed');
+    }
+
+    // Federation publisher (opt-in via FEDERATION_ENABLED=1)
+    scheduleFederationPublisher(async () => {
+      const recos = getAllRecommendations();
+      return buildStats(recos.map((r) => ({
+        task_type: r.taskType,
+        model_used: r.preferredModel,
+        samples: r.rationale.samples,
+        success_rate: r.rationale.successRate,
+        avg_latency_ms: r.rationale.avgLatencyMs,
+      })));
+    });
   } catch (err) {
     logger.error({ err }, 'Failed to start server');
     process.exit(1);

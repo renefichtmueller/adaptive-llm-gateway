@@ -92,7 +92,7 @@ CREATE INDEX idx_ban_analytics_term ON ban_analytics (term);
 CREATE INDEX idx_ban_analytics_created_at ON ban_analytics (created_at DESC);
 CREATE INDEX idx_ban_analytics_caller ON ban_analytics (caller);
 
--- TIP enrichment log (transceiver-specific)
+-- Example domain-specific enrichment log
 CREATE TABLE IF NOT EXISTS tip_enrichment_log (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),

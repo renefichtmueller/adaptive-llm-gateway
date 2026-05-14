@@ -60,6 +60,25 @@ Apps talk OpenAI- or Anthropic-shaped JSON to one URL. The gateway picks the rig
 
 **TL;DR:** If you pay $200+/month for AI subscriptions and want a single endpoint to use them all — with built-in security + compression — this is built for you. For 100-provider production scale, use LiteLLM.
 
+## 🚀 Killer features (none of the alternatives have these)
+
+1. **CLI Subscription Bridges** — wrap Claude Code / ChatGPT / Copilot / Codex / Gemini / M365 / Aider as HTTP. Pay flat-rate subs, get unified API.
+2. **Auto-Discovery** — one click scans for installed CLIs, local LLM servers, configured API-keys.
+3. **Prompt-Injection Defense** — 20+ patterns, EN+DE, OWASP LLM-01 coverage.
+4. **PII Redaction** — auto-redact email/phone/credit-card/IBAN/SSN/IP/JWT/AWS-keys before sending to cloud, restore in response. **GDPR/HIPAA-friendly out of the box.**
+5. **Output-Stream Defense** — scan generated tokens *as they stream* for secret-leakage and system-prompt echo. Cut the stream mid-flight on detection.
+6. **Cost-aware Adaptive Routing** — periodically learns from your audit log which (task_type, model) pair gives the best success-rate-per-cost. Self-improving over time.
+7. **Reasoning-Trace Capture** — split o1 / DeepSeek-R1 / Claude-thinking chain-of-thought from final answer. Stored separately, searchable, auditable.
+8. **Time-Travel Debugging** — replay any past call with a different model, prompt, or temperature. See the diff. A/B-test routing rules.
+9. **Workspace Presets** — one `workspace.yaml` describes the whole gateway config. Commit to git, share with team, transparent setup audit.
+10. **MCP Server Mode** — gateway exposes itself as a Model Context Protocol server (HTTP + SSE + stdio). Claude Desktop / Cursor / Zed AI / Cline call us natively.
+11. **Plugin System** — drop-in pre/post hooks per request via `PLUGINS_DIR`. Custom redaction, transformations, validators.
+12. **Federated Stats** — opt-in cross-instance learning: anonymized routing-quality data shared between gateway nodes. Better routing for everyone, zero PII leak.
+13. **Voice Pipeline** — `/v1/audio/transcriptions` (Whisper) + `/v1/audio/speech` (Piper). Voice-first AI on the same gateway.
+14. **Semantic Cache** — embedding-based response cache via Ollama nomic-embed-text.
+15. **Bridge Watchdog** — auto-detects crashed CLI bridges and respawns them.
+16. **Build-Drift Guard** — refuses to start when src is newer than compiled dist.
+
 ## 🛡 Prompt-Injection Defense — first class
 
 Most gateways assume the input is trustworthy. We don't. The gateway ships
@@ -167,13 +186,20 @@ The gateway plus a Postgres instance start in two containers. Subscription CLIs 
 
 | Method | Path | Compatible with |
 |---|---|---|
-| `POST` | `/v1/chat/completions` | OpenAI `chat.completions.create` |
+| `POST` | `/v1/chat/completions` | OpenAI `chat.completions.create` (streaming + tools) |
 | `POST` | `/v1/messages` | Anthropic `messages.create` |
 | `POST` | `/v1/completion` | Native — `caller`, `task_type`, `options.compression` |
 | `POST` | `/v1/responses` | OpenAI Responses API |
+| `POST` | `/v1/embeddings` | OpenAI `embeddings.create` |
+| `POST` | `/v1/audio/transcriptions` | Whisper — speech to text |
+| `POST` | `/v1/audio/speech` | Piper — text to speech |
 | `POST` | `/v1/race` | Multi-model race |
 | `POST` | `/v1/batch` | Batched submission |
+| `POST` | `/v1/replay` | Time-travel: replay a past call with overrides |
+| `POST` | `/v1/federation/ingest` | Receive anonymized stats from a peer gateway |
 | `GET`  | `/v1/models` | List every routable model |
+| `POST` | `/mcp` | Model Context Protocol (JSON-RPC) |
+| `GET`  | `/mcp/sse` | MCP over Server-Sent Events |
 | `GET`  | `/health` | Liveness + circuit-breaker state |
 | `GET`  | `/api/dashboard/discover` | Full provider scan |
 
