@@ -57,7 +57,7 @@ export class ChatGPTAPIAdapter {
     ollamaUrl: process.env.OLLAMA_URL || 'localhost:11434'
   })
 
-  constructor(private port: number = 3111) {
+  constructor(private port: number = 0) {
     this.setupRoutes()
   }
 

@@ -102,7 +102,7 @@ export class LLMGatewayClient {
   }) {
     this.baseUrl = config.baseUrl
       ?? process.env['LLM_GATEWAY_URL']
-      ?? 'http://localhost:3103';
+      ?? 'http://localhost:0000';
     this.ollamaUrl = config.ollamaUrl
       ?? process.env['OLLAMA_URL']
       ?? 'http://localhost:11434';

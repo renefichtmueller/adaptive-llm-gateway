@@ -53,6 +53,6 @@ USER gateway
 EXPOSE 3100
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD wget -q -O- http://localhost:3100/health/live || exit 1
+  CMD wget -q -O- http://localhost:0000/health/live || exit 1
 
 CMD ["node", "packages/gateway/dist/server.js"]

@@ -63,7 +63,7 @@ export const SUBSCRIPTION_CATALOG: readonly SubscriptionDescriptor[] = [
     label: 'Claude Code (Anthropic Subscription)',
     command: 'claude',
     versionArgs: ['--version'],
-    bridgePort: 3250,
+    bridgePort: 0,  // configure via *_BRIDGE_URL env var
     bridgeEnvKey: 'CLAUDE_BRIDGE_URL',
     providerName: 'claude-bridge',
     bridgeImplementation: 'inline-claude',
@@ -78,7 +78,7 @@ export const SUBSCRIPTION_CATALOG: readonly SubscriptionDescriptor[] = [
     label: 'GitHub Copilot Subscription',
     command: 'gh',
     versionArgs: ['copilot', '--version'],
-    bridgePort: 3252,
+    bridgePort: 0,  // configure via *_BRIDGE_URL env var
     bridgeEnvKey: 'COPILOT_BRIDGE_URL',
     providerName: 'copilot-bridge',
     bridgeImplementation: 'inline-copilot',
@@ -92,7 +92,7 @@ export const SUBSCRIPTION_CATALOG: readonly SubscriptionDescriptor[] = [
     label: 'Microsoft 365 Copilot Subscription',
     command: 'node',
     versionArgs: ['--version'],
-    bridgePort: 3257,
+    bridgePort: 0,  // configure via *_BRIDGE_URL env var
     bridgeEnvKey: 'M365_COPILOT_BRIDGE_URL',
     providerName: 'm365-copilot-bridge',
     bridgeImplementation: 'inline-openai',
@@ -106,7 +106,7 @@ export const SUBSCRIPTION_CATALOG: readonly SubscriptionDescriptor[] = [
     label: 'Google Gemini Advanced Subscription',
     command: 'gemini',
     versionArgs: ['--version'],
-    bridgePort: 3254,
+    bridgePort: 0,  // configure via *_BRIDGE_URL env var
     bridgeEnvKey: 'GEMINI_BRIDGE_URL',
     providerName: 'gemini-bridge',
     bridgeImplementation: 'inline-openai',
@@ -121,7 +121,7 @@ export const SUBSCRIPTION_CATALOG: readonly SubscriptionDescriptor[] = [
     command: 'codex',
     versionArgs: ['--version'],
     authProbeArgs: ['login', 'status'],
-    bridgePort: 3253,
+    bridgePort: 0,  // configure via *_BRIDGE_URL env var
     bridgeEnvKey: 'CODEX_BRIDGE_URL',
     providerName: 'codex-bridge',
     bridgeImplementation: 'external-codex',
@@ -142,7 +142,7 @@ export const SUBSCRIPTION_CATALOG: readonly SubscriptionDescriptor[] = [
     label: 'Aider AI Pair Programmer',
     command: 'aider',
     versionArgs: ['--version'],
-    bridgePort: 3256,
+    bridgePort: 0,  // configure via *_BRIDGE_URL env var
     bridgeEnvKey: 'AIDER_BRIDGE_URL',
     providerName: 'aider-bridge',
     bridgeImplementation: 'inline-openai',

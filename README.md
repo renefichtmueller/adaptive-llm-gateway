@@ -91,7 +91,7 @@ The Adaptive LLM Gateway addresses all three. Subscription bridges turn flat-rat
 
 ## Screenshots
 
-Run the gateway, open `http://localhost:3103`, and you'll see:
+Run the gateway, open `http://localhost:0000`, and you'll see:
 
 | | |
 |---|---|
@@ -175,7 +175,7 @@ npm --workspace=packages/gateway run build
 npm --workspace=packages/gateway start
 ```
 
-Open `http://localhost:3103` → click **⚡ discover & connect all**.
+Open `http://localhost:0000` → click **⚡ discover & connect all**.
 
 ### Docker Compose
 
@@ -201,7 +201,7 @@ Postgres bundles automatically. Subscription CLIs live on the host — Docker ca
   /v1/chat/...      /v1/messages      /mcp    /v1/...     /v1/...
        │
    ┌───┴────────────────────────────────────────────────────────────┐
-   │              Adaptive LLM Gateway :3103                        │
+   │              Adaptive LLM Gateway :0000                        │
    │                                                                │
    │  ┌──────────────────────────────────────────────────────────┐  │
    │  │ Pre-classify → PII Redact → Injection Scan → Compress    │  │
@@ -216,7 +216,7 @@ Postgres bundles automatically. Subscription CLIs live on the host — Docker ca
       │            │               │              │
    Ollama   Subscription      Hosted APIs    Free-tier APIs
   (local)   bridges                          (Groq, Cerebras,
-            :3250-3257       OpenAI, Anth.    Mistral, NVIDIA,
+            :0000-3257       OpenAI, Anth.    Mistral, NVIDIA,
             Claude/ChatGPT/  Google           Cloudflare, Together,
             Copilot/Codex/                    Fireworks, DeepSeek,
             Gemini/M365/                      Replicate, Perplexity,

@@ -2,7 +2,7 @@
 
 import ChatGPTAPIAdapter from './index'
 
-const port = parseInt(process.env.CHATGPT_API_PORT || '3111', 10)
+const port = parseInt(process.env.CHATGPT_API_PORT || '0', 10)
 const adapter = new ChatGPTAPIAdapter(port)
 
 adapter.start().catch(error => {

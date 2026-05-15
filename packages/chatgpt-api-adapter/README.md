@@ -37,7 +37,7 @@ import OpenAI from 'openai'
 
 const client = new OpenAI({
   apiKey: 'not-needed',
-  baseURL: 'http://localhost:3111/v1'
+  baseURL: 'http://localhost:0000/v1'
 })
 
 const response = await client.chat.completions.create({
@@ -51,7 +51,7 @@ const response = await client.chat.completions.create({
 ### With curl
 
 ```bash
-curl http://localhost:3111/v1/chat/completions \
+curl http://localhost:0000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4",
@@ -65,7 +65,7 @@ curl http://localhost:3111/v1/chat/completions \
 ### Streaming
 
 ```bash
-curl http://localhost:3111/v1/chat/completions \
+curl http://localhost:0000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4",
@@ -110,8 +110,8 @@ Model Selection (claude, Ollama, external)
 ## Environment Variables
 
 ```bash
-CHATGPT_API_PORT=3111                          # Listen port
-GATEWAY_URL=http://localhost:3103  # LLM Gateway endpoint
+CHATGPT_API_PORT=0                          # Listen port
+GATEWAY_URL=http://localhost:0000  # LLM Gateway endpoint
 OLLAMA_URL=localhost:11434              # Local Ollama fallback
 AGENT_ID=chatgpt-api-adapter                   # Agent identifier
 LOG_LEVEL=debug                                # Logging level
@@ -238,8 +238,8 @@ Tests cover:
 
 ### OpenAI client not connecting
 
-1. Verify adapter is running: `curl http://localhost:3111/health`
-2. Check baseURL in client: should be `http://localhost:3111/v1` (no `/v1` at end)
+1. Verify adapter is running: `curl http://localhost:0000/health`
+2. Check baseURL in client: should be `http://localhost:0000/v1` (no `/v1` at end)
 3. Ensure gateway is accessible: `curl $GATEWAY_URL/health`
 
 ### Streaming not working
@@ -251,7 +251,7 @@ Tests cover:
 ### Slow responses
 
 1. Check gateway latency: `curl -w "%{time_total}\n" $GATEWAY_URL/health`
-2. Verify model availability: `curl http://localhost:3111/v1/models`
+2. Verify model availability: `curl http://localhost:0000/v1/models`
 3. Check system resources on gateway (CPU, memory, disk)
 
 ## Compatibility

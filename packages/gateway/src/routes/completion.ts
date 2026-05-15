@@ -1111,18 +1111,22 @@ export async function completionRoute(fastify: FastifyInstance): Promise<void> {
     // OpenAI's Responses API is consumed primarily by Codex.app + Codex CLI,
     // both of which authenticate against a ChatGPT-Plus/Pro subscription via
     // OAuth — not against the pay-per-token API. The codex-bridge process
-    // (default http://127.0.0.1:3253) wraps `codex exec` and exposes an
+    // The codex-bridge wraps `codex exec` and exposes an
     // OpenAI-compatible /v1/chat/completions endpoint that speaks the
     // subscription. When the user sends a gpt-5*/gpt-4*/codex-* model here,
     // we forward through the bridge so the subscription quota is honoured
     // rather than the request being mis-routed to a local fallback model.
     //
-    // To enable: set CODEX_BRIDGE_URL (default points at localhost:3253)
-    // and run the codex-bridge service. If the env var is unset and no
-    // bridge is reachable, the call falls through to the standard pipeline.
+    // To enable: set CODEX_BRIDGE_URL to your bridge endpoint
+    // and run the codex-bridge service. If the env var is unset, the
+    // call falls through to the standard pipeline.
     if (/^gpt-/i.test(parsed.data.model ?? '')) {
       try {
-        const bridgeUrl = process.env['CODEX_BRIDGE_URL'] ?? 'http://127.0.0.1:3253';
+        const bridgeUrl = process.env['CODEX_BRIDGE_URL'];
+        if (!bridgeUrl) {
+          // CODEX_BRIDGE_URL not configured — skip passthrough, fall through.
+          throw new Error('CODEX_BRIDGE_URL not set');
+        }
         const inputText = typeof parsed.data.input === 'string'
           ? parsed.data.input
           : (Array.isArray(parsed.data.input)

@@ -71,7 +71,7 @@ node server.js
 ### Example .env
 
 ```bash
-COPILOT_BRIDGE_PORT=3252
+COPILOT_BRIDGE_PORT=0
 COPILOT_API_INTERNAL_PORT=4141
 ```
 
@@ -100,7 +100,7 @@ pm2 start server.js --name copilot-bridge
 ### Verify Health
 
 ```bash
-curl http://localhost:3252/health
+curl http://localhost:0000/health
 ```
 
 Response:
@@ -119,7 +119,7 @@ Response:
 ### Direct API Call
 
 ```bash
-curl -X POST http://localhost:3252/v1/chat/completions \
+curl -X POST http://localhost:0000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4",
@@ -139,7 +139,7 @@ curl -X POST http://localhost:3252/v1/chat/completions \
 Once integrated into the gateway:
 
 ```bash
-curl -X POST http://localhost:3103/api/generate \
+curl -X POST http://localhost:0000/api/generate \
   -H "Content-Type: application/json" \
   -d '{
     "model": "copilot",
@@ -161,7 +161,7 @@ export const EXTERNAL_PROVIDERS: ExternalProviderConfig = {
   // ... other providers
   copilot: {
     name: 'GitHub Copilot',
-    baseUrl: 'http://localhost:3252',
+    baseUrl: 'http://localhost:0000',
     requiresAuth: false, // Auth handled internally by copilot-api
     models: ['gpt-4', 'gpt-3.5-turbo'],
     rateLimit: 60, // requests per minute
@@ -236,7 +236,7 @@ npm run auth
 
 ```bash
 # Find process using port 4141
-lsof -i :4141
+lsof -i :0000
 
 # Kill if needed
 kill -9 <PID>

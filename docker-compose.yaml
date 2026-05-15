@@ -26,10 +26,10 @@ services:
     build: .
     container_name: llm-gateway
     ports:
-      - "${PORT:-3103}:3103"
+      - "${PORT:-0}:${PORT:-0}"
     environment:
       NODE_ENV: production
-      PORT: "3103"
+      PORT: "0000"
       DATABASE_URL: "postgresql://gateway:gateway@postgres:5432/llm_gateway"
       OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
@@ -63,7 +63,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O-", "http://localhost:3103/health"]
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:0000/health"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -18,7 +18,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(__dirname, '..', 'docs', 'screenshots');
-const GATEWAY = process.argv[2] || 'http://localhost:3103';
+const GATEWAY = process.argv[2] || 'http://localhost:0000';
 const TOKEN = process.argv[3] || process.env.DASHBOARD_AUTH_TOKEN || '';
 
 const CAPTURES = [
