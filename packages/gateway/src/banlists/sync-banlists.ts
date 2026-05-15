@@ -1,26 +1,25 @@
-// Sync ban list additions from Gitea CSV
+// Sync ban list additions from a remote CSV source
 // CSV format: term,category,language,wholeWord
-// URL: process.env['BANLIST_SOURCE_URL'] or 'https://your-org.github.io/banlists/'
+// URL: set BANLIST_SOURCE_URL env var; default points at a placeholder.
 
 import { logger } from '../observability/logger.js';
 
-const GITEA_BASE =
-  'process.env['BANLIST_SOURCE_URL'] or 'https://your-org.github.io/banlists/'';
+const BANLIST_SOURCE_URL = process.env['BANLIST_SOURCE_URL'] ?? 'https://example.invalid/banlists/';
 
-export interface GiteaBanEntry {
+export interface BanlistEntry {
   term: string;
   category: string;
   language: 'en' | 'de' | 'auto';
   wholeWord: boolean;
 }
 
-let syncedEntries: GiteaBanEntry[] = [];
+let syncedEntries: BanlistEntry[] = [];
 let lastSyncAt: Date | null = null;
 const SYNC_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
-function parseCSV(raw: string): GiteaBanEntry[] {
+function parseCSV(raw: string): BanlistEntry[] {
   const lines = raw.split('\n').filter((l) => l.trim() && !l.startsWith('#'));
-  const entries: GiteaBanEntry[] = [];
+  const entries: BanlistEntry[] = [];
 
   for (const line of lines) {
     const parts = line.split(',');
@@ -40,7 +39,7 @@ function parseCSV(raw: string): GiteaBanEntry[] {
 }
 
 async function fetchCsv(filename: string): Promise<string> {
-  const url = `${GITEA_BASE}${filename}`;
+  const url = `${BANLIST_SOURCE_URL}${filename}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
 
@@ -50,7 +49,7 @@ async function fetchCsv(filename: string): Promise<string> {
       headers: { Accept: 'text/plain' },
     });
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status} from Gitea`);
+      throw new Error(`HTTP ${response.status} from remote source`);
     }
     return await response.text();
   } finally {
@@ -58,7 +57,7 @@ async function fetchCsv(filename: string): Promise<string> {
   }
 }
 
-export async function syncBanlistsFromGitea(): Promise<GiteaBanEntry[]> {
+export async function syncBanlists(): Promise<BanlistEntry[]> {
   const now = new Date();
   if (lastSyncAt && now.getTime() - lastSyncAt.getTime() < SYNC_INTERVAL_MS) {
     return syncedEntries;
@@ -71,43 +70,43 @@ export async function syncBanlistsFromGitea(): Promise<GiteaBanEntry[]> {
       fetchCsv('auto-additions.csv'),
     ]);
 
-    const entries: GiteaBanEntry[] = [];
+    const entries: BanlistEntry[] = [];
 
     if (enCsv.status === 'fulfilled') {
       entries.push(...parseCSV(enCsv.value));
     } else {
-      logger.warn({ reason: enCsv.reason }, 'Failed to fetch en-additions.csv from Gitea');
+      logger.warn({ reason: enCsv.reason }, 'Failed to fetch en-additions.csv from remote source');
     }
 
     if (deCsv.status === 'fulfilled') {
       entries.push(...parseCSV(deCsv.value));
     } else {
-      logger.warn({ reason: deCsv.reason }, 'Failed to fetch de-additions.csv from Gitea');
+      logger.warn({ reason: deCsv.reason }, 'Failed to fetch de-additions.csv from remote source');
     }
 
     if (autoCsv.status === 'fulfilled') {
       entries.push(...parseCSV(autoCsv.value));
     } else {
-      logger.warn({ reason: autoCsv.reason }, 'Failed to fetch auto-additions.csv from Gitea');
+      logger.warn({ reason: autoCsv.reason }, 'Failed to fetch auto-additions.csv from remote source');
     }
 
     syncedEntries = entries;
     lastSyncAt = now;
-    logger.info({ count: entries.length }, 'Ban list synced from Gitea');
+    logger.info({ count: entries.length }, 'Ban list synced from remote source');
   } catch (err) {
-    logger.error({ err }, 'Failed to sync ban lists from Gitea');
+    logger.error({ err }, 'Failed to sync ban lists from remote source');
   }
 
   return syncedEntries;
 }
 
-export function getGiteaEntries(): GiteaBanEntry[] {
+export function getBanlistEntries(): BanlistEntry[] {
   return syncedEntries;
 }
 
 // Trigger background sync without blocking
 export function triggerBackgroundSync(): void {
-  syncBanlistsFromGitea().catch((err) => {
+  syncBanlists().catch((err) => {
     logger.warn({ err }, 'Background ban list sync failed');
   });
 }

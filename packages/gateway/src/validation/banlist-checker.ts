@@ -1,7 +1,7 @@
 import { EN_BANLIST } from '../banlists/en.js';
 import { DE_BANLIST } from '../banlists/de.js';
 import { AUTO_DETECTED_BANLIST } from '../banlists/auto-detected.js';
-import { getGiteaEntries } from '../banlists/sync-from-gitea.js';
+import { getBanlistEntries } from '../banlists/sync-banlists.js';
 
 export interface BanViolation {
   term: string;
@@ -86,7 +86,7 @@ export function checkBanlist(
   }
 
   // Gitea synced additions
-  const giteaEntries = getGiteaEntries();
+  const giteaEntries = getBanlistEntries();
   const relevantGiteaEntries = giteaEntries.filter(
     (e) => e.language === 'auto' || e.language === language,
   );
