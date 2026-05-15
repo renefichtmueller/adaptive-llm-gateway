@@ -79,7 +79,6 @@ const SETTINGS_PATH =
 const DEFAULT_SUBSCRIPTIONS: Settings['subscriptions'] = {
   'claude-code': { enabled: true, autoSpawn: true },
   'github-copilot': { enabled: true, autoSpawn: true },
-  'chatgpt': { enabled: true, autoSpawn: true },
   'gemini': { enabled: true, autoSpawn: true },
   'codex': { enabled: true, autoSpawn: true },
   'aider': { enabled: true, autoSpawn: true },
@@ -193,7 +192,6 @@ export function applySettingsToEnv(settings: Settings = loadSettings()): void {
     'claude-code': 'CLAUDE_BRIDGE_URL',
     'github-copilot': 'COPILOT_BRIDGE_URL',
     'microsoft-365-copilot': 'M365_COPILOT_BRIDGE_URL',
-    'chatgpt': 'CHATGPT_BRIDGE_URL',
     'gemini': 'GEMINI_BRIDGE_URL',
     'codex': 'CODEX_BRIDGE_URL',
     'aider': 'AIDER_BRIDGE_URL',
