@@ -23,7 +23,12 @@ jobs:
 
       - name: Fetch + append traffic snapshots
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN cannot read /traffic/* — that endpoint requires push
+          # or admin scope. Set up a PAT (Classic, repo scope) as the secret
+          # `TRAFFIC_TOKEN`. Falls back to GITHUB_TOKEN so the workflow stays
+          # green for users who haven't configured the PAT yet (it will then
+          # produce 403s and skip, which is acceptable).
+          GH_TOKEN: ${{ secrets.TRAFFIC_TOKEN || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -34,9 +39,11 @@ jobs:
           for ep in clones views popular/referrers popular/paths; do
             slug=$(echo "$ep" | tr '/' '-')
             out="docs/traffic-history/${slug}.jsonl"
-            payload=$(gh api "repos/${REPO}/traffic/${ep}")
-            # Append one line per snapshot day, deduplicated by date.
-            jq -c --arg d "$STAMP" '. + {snapshot_date: $d}' <<<"$payload" >> "$out"
+            payload=$(gh api "repos/${REPO}/traffic/${ep}" 2>/dev/null) || continue
+            # /traffic/clones + /traffic/views return objects; /traffic/popular/*
+            # return arrays. Wrap into a date-tagged envelope so both shapes
+            # append cleanly into the same JSONL.
+            jq -c --arg d "$STAMP" '{snapshot_date: $d, data: .}' <<<"$payload" >> "$out"
           done
 
           # Maintain a tidy human-readable rollup CSV for quick eyeballing.
