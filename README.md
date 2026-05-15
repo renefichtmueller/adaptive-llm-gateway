@@ -35,6 +35,8 @@ Every IDE plugin and agent framework wants its own integration, none of them kno
 - 🔌 **MCP server mode** — gateway exposes itself as a Model Context Protocol server (HTTP + SSE + stdio), callable natively from Claude Desktop / Cursor / Zed AI / Cline
 - 🧩 **Plugin system** — drop-in pre/post hooks per request via `PLUGINS_DIR`
 - 🌐 **Federated stats** — opt-in cross-instance learning, anonymized; better routing for every node in the mesh
+- 🪙 **Unified subscription wallet** — one quota pool per real-world subscription, not per client app. ChatGPT.app + Codex.app + Codex CLI all share the same ChatGPT-Plus pool, so the dashboard shows what you actually have left, not three duplicated counters
+- 🔁 **Subscription passthrough for `gpt-*` on `/v1/responses`** — Codex.app speaks the OpenAI Responses API; the gateway forwards those calls through the codex-bridge so the request hits your ChatGPT subscription via OAuth, no API key needed. Falls through to the standard pipeline when the bridge isn't configured
 
 Plus all the table stakes: OpenAI- and Anthropic-compatible APIs with streaming + tool-calling, embeddings, voice (Whisper STT + Piper TTS), per-call cost tracking with a gamified dashboard, semantic + exact-match caching, and a build-drift guard that refuses to start when source is newer than compiled output.
 
@@ -75,6 +77,8 @@ The Adaptive LLM Gateway addresses all three. Subscription bridges turn flat-rat
 | **MCP server mode** | **✓ (HTTP+SSE+stdio)** | – | – | – | – |
 | **Plugin system** | **✓** | – | – | – | – |
 | **Federated cross-instance learning** | **✓ (opt-in)** | – | – | – | – |
+| **Unified subscription wallet** (one pool per account, not per client) | **✓** | – | – | – | – |
+| **Codex/ChatGPT subscription passthrough** (`/v1/responses` via OAuth bridge) | **✓** | – | – | – | – |
 | Auto-discovery of installed CLIs | ✓ | – | – | – | – |
 | Context compression built-in | ✓ (4 modes) | – | – | – | – |
 | Semantic cache (embedding similarity) | ✓ | extension | ✓ | – | – |
@@ -158,6 +162,28 @@ Reads `llm_calls` every 15 min, groups by (`task_type`, `model_used`), computes 
 Now Claude Desktop, Cursor, Zed AI, and Cline can call our gateway natively. Three MCP tools exposed: `gateway.complete`, `gateway.embed`, `gateway.discover`.
 
 (See [`docs/mcp-integration.md`](docs/mcp-integration.md) for the full setup guide.)
+
+### 🪙 Unified Subscription Wallet
+
+Most "LLM gateways" treat each *client* as a separate spend bucket. That's wrong when several clients share one upstream account. A single ChatGPT Plus / Pro / Team / Enterprise subscription covers all of these at once:
+
+- **chatgpt.com** web UI
+- **ChatGPT.app** desktop
+- **Codex.app** desktop
+- **Codex CLI** in the terminal
+- Sora, Operator, Agent mode (depending on plan)
+
+They share one OAuth account, one `account_id`, one rolling quota window. Forty messages in Codex.app burn the same forty messages of headroom you'd otherwise have for chatgpt.com.
+
+The gateway models this directly: `openai` is one wallet entry covering both clients, with the correct ~80 msg / 3 h window for ChatGPT Plus. Models `gpt-*` and `codex-mini-latest` all bill against it. The dashboard shows the true remaining quota, not a sum of duplicates.
+
+### 🔁 `/v1/responses` Passthrough to the Codex Bridge
+
+Codex.app speaks OpenAI's **Responses API** (`POST /v1/responses`) and authenticates against a ChatGPT subscription via OAuth — never an API key. To make that subscription usable through the gateway, set `CODEX_BRIDGE_URL` to point at a running `codex-bridge` service (a thin wrapper around `codex exec`). The gateway then detects `gpt-*` model requests on `/v1/responses` and forwards the prompt through the bridge, so the call lands on your subscription instead of a local fallback model.
+
+If `CODEX_BRIDGE_URL` isn't set, the request falls through to the standard pipeline (Ollama / configured external providers).
+
+Every passthrough call also records against the unified OpenAI wallet, so quota tracking stays accurate regardless of which client originated the request.
 
 ---
 
