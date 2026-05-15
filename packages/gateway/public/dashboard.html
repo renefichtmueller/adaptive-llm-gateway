@@ -1811,7 +1811,7 @@
           <span class="api-tag">OpenAI-compatible · works with `openai` SDK</span>
           <button class="btn ghost api-copy" data-target="api-snippet-chat" type="button">copy</button>
         </div>
-        <pre id="api-snippet-chat" class="api-snippet"><code>curl http://localhost:3103/v1/chat/completions \
+        <pre id="api-snippet-chat" class="api-snippet"><code>curl http://localhost:0000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "claude-sonnet-4.6",
@@ -1827,7 +1827,7 @@
           <span class="api-tag">Anthropic-compatible · works with `@anthropic-ai/sdk`</span>
           <button class="btn ghost api-copy" data-target="api-snippet-messages" type="button">copy</button>
         </div>
-        <pre id="api-snippet-messages" class="api-snippet"><code>curl http://localhost:3103/v1/messages \
+        <pre id="api-snippet-messages" class="api-snippet"><code>curl http://localhost:0000/v1/messages \
   -H "Content-Type: application/json" \
   -d '{
     "model": "claude-sonnet-4.6",
@@ -1844,7 +1844,7 @@
           <span class="api-tag">native — full caller-tracking + compression options</span>
           <button class="btn ghost api-copy" data-target="api-snippet-completion" type="button">copy</button>
         </div>
-        <pre id="api-snippet-completion" class="api-snippet"><code>curl http://localhost:3103/v1/completion \
+        <pre id="api-snippet-completion" class="api-snippet"><code>curl http://localhost:0000/v1/completion \
   -H "Content-Type: application/json" \
   -d '{
     "caller": "my-app",
@@ -1862,7 +1862,7 @@
           <span class="api-tag">list every model the gateway can route to</span>
           <button class="btn ghost api-copy" data-target="api-snippet-models" type="button">copy</button>
         </div>
-        <pre id="api-snippet-models" class="api-snippet"><code>curl http://localhost:3103/v1/models</code></pre>
+        <pre id="api-snippet-models" class="api-snippet"><code>curl http://localhost:0000/v1/models</code></pre>
       </div>
 
       <!-- ── Try-It-Out playground ────────────────────────────────────── -->
@@ -1907,18 +1907,18 @@
             </tr>
           </thead>
           <tbody>
-            <tr><td><code>claude-sonnet-4.6</code>, <code>claude-haiku</code>, <code>claude-opus</code></td><td>claude-bridge</td><td>Claude Code Max (OAuth)</td><td>3250</td><td class="api-bridge-status" data-bridge="claude-bridge">—</td></tr>
-            <tr><td><code>gpt-4o</code>, <code>gpt-4.1</code>, <code>gpt-5.x</code></td><td>openai-bridge</td><td>ChatGPT Plus / Pro</td><td>3251</td><td class="api-bridge-status" data-bridge="openai-bridge">—</td></tr>
-            <tr><td><code>copilot-gpt-4o</code>, <code>copilot-claude-3.7</code></td><td>copilot-bridge</td><td>GitHub Copilot</td><td>3252</td><td class="api-bridge-status" data-bridge="copilot-bridge">—</td></tr>
-            <tr><td><code>codex-mini</code>, <code>gpt-5.1-codex-mini</code></td><td>codex-bridge</td><td>OpenAI Codex CLI</td><td>3253</td><td class="api-bridge-status" data-bridge="codex-bridge">—</td></tr>
-            <tr><td><code>m365-copilot</code></td><td>m365-copilot-bridge</td><td>Microsoft 365 Copilot</td><td>3257</td><td class="api-bridge-status" data-bridge="m365-copilot-bridge">—</td></tr>
+            <tr><td><code>claude-sonnet-4.6</code>, <code>claude-haiku</code>, <code>claude-opus</code></td><td>claude-bridge</td><td>Claude Code Max (OAuth)</td><td>0000</td><td class="api-bridge-status" data-bridge="claude-bridge">—</td></tr>
+            <tr><td><code>gpt-4o</code>, <code>gpt-4.1</code>, <code>gpt-5.x</code></td><td>openai-bridge</td><td>ChatGPT Plus / Pro</td><td>0000</td><td class="api-bridge-status" data-bridge="openai-bridge">—</td></tr>
+            <tr><td><code>copilot-gpt-4o</code>, <code>copilot-claude-3.7</code></td><td>copilot-bridge</td><td>GitHub Copilot</td><td>0000</td><td class="api-bridge-status" data-bridge="copilot-bridge">—</td></tr>
+            <tr><td><code>codex-mini</code>, <code>gpt-5.1-codex-mini</code></td><td>codex-bridge</td><td>OpenAI Codex CLI</td><td>0000</td><td class="api-bridge-status" data-bridge="codex-bridge">—</td></tr>
+            <tr><td><code>m365-copilot</code></td><td>m365-copilot-bridge</td><td>Microsoft 365 Copilot</td><td>0000</td><td class="api-bridge-status" data-bridge="m365-copilot-bridge">—</td></tr>
             <tr><td><code>qwen2.5:3b / 7b / 14b / 32b</code>, <code>llama3.3:70b</code>, custom local models</td><td>ollama (local)</td><td>local — no cost</td><td>11434</td><td class="api-bridge-status" data-bridge="ollama">—</td></tr>
           </tbody>
         </table>
       </div>
       <div class="share-hint" style="margin-top: 12px;">
         The gateway picks the bridge from <code>routing-rules.yaml</code> based on <code>task_type</code> and the
-        requested <code>model</code>. You can also hit a bridge directly (e.g. <code>http://localhost:3250/v1/messages</code>)
+        requested <code>model</code>. You can also hit a bridge directly (e.g. <code>http://localhost:0000/v1/messages</code>)
         — but then you bypass compression, savings tracking, and the routing rules.
       </div>
     </section>

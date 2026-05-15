@@ -78,7 +78,7 @@ const TOOLS: readonly McpToolDef[] = [
 
 // ─── Tool implementations ────────────────────────────────────────────────────
 
-const INTERNAL_BASE = process.env['INTERNAL_GATEWAY_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3103'}`;
+const INTERNAL_BASE = process.env['INTERNAL_GATEWAY_URL'] ?? `http://localhost:${process.env['PORT'] ?? '0000'}`;
 
 async function callComplete(params: Record<string, unknown>): Promise<unknown> {
   const res = await fetch(`${INTERNAL_BASE}/v1/completion`, {

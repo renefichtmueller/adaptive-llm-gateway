@@ -17,7 +17,7 @@ npm install @llm-gateway/chatgpt-api-adapter
 ### As a Standalone Server
 
 ```bash
-# Start the adapter (listens on port 3111)
+# Start the adapter (listens on port 0000)
 npx chatgpt-api
 
 # Or with custom port
@@ -26,7 +26,7 @@ CHATGPT_API_PORT=8080 npx chatgpt-api
 # Or in Node.js
 import ChatGPTAPIAdapter from '@llm-gateway/chatgpt-api-adapter'
 
-const adapter = new ChatGPTAPIAdapter(3111)
+const adapter = new ChatGPTAPIAdapter(0000)
 await adapter.start()
 ```
 

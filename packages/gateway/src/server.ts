@@ -198,7 +198,7 @@ async function main() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
-  const port = parseInt(process.env['PORT'] ?? '3100', 10);
+  const port = parseInt(process.env['PORT'] ?? '0000', 10);
   const host = process.env['HOST'] ?? '0.0.0.0';
 
   try {

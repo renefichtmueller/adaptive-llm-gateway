@@ -216,7 +216,7 @@ Postgres bundles automatically. Subscription CLIs live on the host — Docker ca
       │            │               │              │
    Ollama   Subscription      Hosted APIs    Free-tier APIs
   (local)   bridges                          (Groq, Cerebras,
-            :0000-3257       OpenAI, Anth.    Mistral, NVIDIA,
+            :0000-0000       OpenAI, Anth.    Mistral, NVIDIA,
             Claude/ChatGPT/  Google           Cloudflare, Together,
             Copilot/Codex/                    Fireworks, DeepSeek,
             Gemini/M365/                      Replicate, Perplexity,

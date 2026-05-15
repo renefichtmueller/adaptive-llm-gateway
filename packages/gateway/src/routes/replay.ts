@@ -77,7 +77,7 @@ export async function replayRoute(fastify: FastifyInstance): Promise<void> {
     };
 
     try {
-      const baseUrl = process.env['INTERNAL_GATEWAY_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3103'}`;
+      const baseUrl = process.env['INTERNAL_GATEWAY_URL'] ?? `http://localhost:${process.env['PORT'] ?? '0000'}`;
       const res = await fetch(`${baseUrl}/v1/completion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
