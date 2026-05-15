@@ -1,0 +1,66 @@
+name: Traffic log
+
+# Persists daily GitHub traffic stats (clones, views, referrers, paths) into
+# docs/traffic-history/, so we keep a record beyond GitHub's 14-day window.
+#
+# Runs once a day at 04:15 UTC (after the daily bucket flips at 00:00 UTC,
+# with a 4h buffer for GitHub-side aggregation lag). The same workflow can
+# be triggered manually from the Actions tab via workflow_dispatch.
+
+on:
+  schedule:
+    - cron: '15 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch + append traffic snapshots
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p docs/traffic-history
+          STAMP=$(date -u +%Y-%m-%d)
+
+          # Each endpoint into its own dated JSON snapshot.
+          for ep in clones views popular/referrers popular/paths; do
+            slug=$(echo "$ep" | tr '/' '-')
+            out="docs/traffic-history/${slug}.jsonl"
+            payload=$(gh api "repos/${REPO}/traffic/${ep}")
+            # Append one line per snapshot day, deduplicated by date.
+            jq -c --arg d "$STAMP" '. + {snapshot_date: $d}' <<<"$payload" >> "$out"
+          done
+
+          # Maintain a tidy human-readable rollup CSV for quick eyeballing.
+          ROLLUP=docs/traffic-history/daily-rollup.csv
+          if [ ! -f "$ROLLUP" ]; then
+            echo "date,unique_clones,total_clones,unique_views,total_views" > "$ROLLUP"
+          fi
+          clones_uniq=$(gh api "repos/${REPO}/traffic/clones" --jq .uniques)
+          clones_tot=$(gh api "repos/${REPO}/traffic/clones"  --jq .count)
+          views_uniq=$(gh api "repos/${REPO}/traffic/views"   --jq .uniques)
+          views_tot=$(gh api "repos/${REPO}/traffic/views"    --jq .count)
+          # Avoid duplicating today's row if the workflow is run twice in one day.
+          if ! grep -q "^${STAMP}," "$ROLLUP"; then
+            echo "${STAMP},${clones_uniq},${clones_tot},${views_uniq},${views_tot}" >> "$ROLLUP"
+          fi
+
+      - name: Commit + push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet docs/traffic-history; then
+            git add docs/traffic-history
+            git commit -m "chore(traffic): daily snapshot $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "No traffic changes — skipping commit."
+          fi
