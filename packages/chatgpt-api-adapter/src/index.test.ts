@@ -5,7 +5,7 @@ describe('ChatGPTAPIAdapter', () => {
   let adapter: ChatGPTAPIAdapter
 
   beforeEach(() => {
-    adapter = new ChatGPTAPIAdapter(0000)
+    adapter = new ChatGPTAPIAdapter(0)
   })
 
   afterEach(async () => {

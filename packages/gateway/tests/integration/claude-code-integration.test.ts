@@ -16,7 +16,7 @@ describe('Claude Code Integration with LLM Gateway', () => {
   let gatewayUrl: string;
 
   beforeAll(() => {
-    // Gateway must be running on localhost:0000 for these tests
+    // Gateway must be running on localhost:0 for these tests
     gatewayUrl = process.env['LLM_GATEWAY_URL'] ?? 'http://localhost:0000';
     client = new LLMGatewayClient({ caller: 'claude-code', baseUrl: gatewayUrl, timeout: 30_000 });
   });
