@@ -34,9 +34,13 @@ RUN apk add --no-cache wget
 # Copy compiled output
 COPY --from=builder /app/packages/gateway/dist ./packages/gateway/dist
 
-# Copy production node_modules
+# Copy production node_modules (workspaces hoist to root /app/node_modules,
+# so a nested /app/packages/gateway/node_modules typically doesn't exist —
+# don't try to COPY it because Dockerfile syntax has no conditional copy).
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages/gateway/node_modules ./packages/gateway/node_modules 2>/dev/null || true
+
+# Also copy the prompts + db migrations needed at runtime
+COPY --from=builder /app/packages/gateway/src/db/migrations ./packages/gateway/dist/db/migrations
 
 # Copy runtime assets (prompt templates, config)
 COPY packages/gateway/prompts ./packages/gateway/prompts
