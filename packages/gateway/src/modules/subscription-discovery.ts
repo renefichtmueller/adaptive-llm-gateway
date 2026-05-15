@@ -17,7 +17,6 @@ export type SubscriptionId =
   | 'claude-code'
   | 'github-copilot'
   | 'microsoft-365-copilot'
-  | 'chatgpt'
   | 'gemini'
   | 'codex'
   | 'aider';
@@ -102,22 +101,7 @@ export const SUBSCRIPTION_CATALOG: readonly SubscriptionDescriptor[] = [
       { id: 'm365-copilot-chat', tier: 'large' },
     ],
   },
-  {
-    id: 'chatgpt',
-    label: 'OpenAI ChatGPT Plus Subscription',
-    command: 'chatgpt',
-    versionArgs: ['--version'],
-    bridgePort: 3251,
-    bridgeEnvKey: 'CHATGPT_BRIDGE_URL',
-    providerName: 'chatgpt-bridge',
-    bridgeImplementation: 'inline-openai',
-    models: [
-      { id: 'gpt-4-turbo', tier: 'reasoning' },
-      { id: 'gpt-4', tier: 'large' },
-      { id: 'gpt-3.5-turbo', tier: 'medium' },
-    ],
-  },
-  {
+{
     id: 'gemini',
     label: 'Google Gemini Advanced Subscription',
     command: 'gemini',
@@ -133,7 +117,7 @@ export const SUBSCRIPTION_CATALOG: readonly SubscriptionDescriptor[] = [
   },
   {
     id: 'codex',
-    label: 'OpenAI Codex CLI Subscription',
+    label: 'OpenAI (ChatGPT + Codex)',
     command: 'codex',
     versionArgs: ['--version'],
     authProbeArgs: ['login', 'status'],
@@ -142,8 +126,14 @@ export const SUBSCRIPTION_CATALOG: readonly SubscriptionDescriptor[] = [
     providerName: 'codex-bridge',
     bridgeImplementation: 'external-codex',
     models: [
+      { id: 'gpt-5.5', tier: 'reasoning' },
+      { id: 'gpt-5', tier: 'reasoning' },
+      { id: 'gpt-5-codex', tier: 'reasoning' },
       { id: 'gpt-5.1-codex', tier: 'reasoning' },
       { id: 'gpt-5.1-codex-mini', tier: 'large' },
+      { id: 'gpt-5-mini', tier: 'medium' },
+      { id: 'gpt-4-turbo', tier: 'large' },
+      { id: 'gpt-4o', tier: 'large' },
       { id: 'codex-mini-latest', tier: 'medium' },
     ],
   },

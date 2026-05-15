@@ -1106,6 +1106,72 @@ export async function completionRoute(fastify: FastifyInstance): Promise<void> {
     }
 
     const callId = `resp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+    // ─── Subscription-bridge passthrough for gpt-* models ────────────────
+    // OpenAI's Responses API is consumed primarily by Codex.app + Codex CLI,
+    // both of which authenticate against a ChatGPT-Plus/Pro subscription via
+    // OAuth — not against the pay-per-token API. The codex-bridge process
+    // (default http://127.0.0.1:3253) wraps `codex exec` and exposes an
+    // OpenAI-compatible /v1/chat/completions endpoint that speaks the
+    // subscription. When the user sends a gpt-5*/gpt-4*/codex-* model here,
+    // we forward through the bridge so the subscription quota is honoured
+    // rather than the request being mis-routed to a local fallback model.
+    //
+    // To enable: set CODEX_BRIDGE_URL (default points at localhost:3253)
+    // and run the codex-bridge service. If the env var is unset and no
+    // bridge is reachable, the call falls through to the standard pipeline.
+    if (/^gpt-/i.test(parsed.data.model ?? '')) {
+      try {
+        const bridgeUrl = process.env['CODEX_BRIDGE_URL'] ?? 'http://127.0.0.1:3253';
+        const inputText = typeof parsed.data.input === 'string'
+          ? parsed.data.input
+          : (Array.isArray(parsed.data.input)
+              ? parsed.data.input
+                  .map((p: any) => typeof p?.content === 'string'
+                    ? p.content
+                    : (Array.isArray(p?.content) ? p.content.map((c: any) => c?.text ?? '').join(' ') : ''))
+                  .join(' ')
+              : '');
+        const upstream = await fetch(`${bridgeUrl}/v1/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: parsed.data.model,
+            messages: [{ role: 'user', content: inputText }],
+          }),
+        });
+        const upstreamJson: any = await upstream.json();
+        if (upstream.ok && upstreamJson?.success !== false) {
+          const text = upstreamJson?.content
+            ?? upstreamJson?.response
+            ?? upstreamJson?.choices?.[0]?.message?.content
+            ?? '';
+          const respBody = toOpenAIResponsesResponse(
+            { output: text, model: parsed.data.model, status: 'approved' },
+            parsed.data.model,
+          );
+          logger.info({ callId, model: parsed.data.model, len: text.length }, 'codex-bridge passthrough OK');
+          // Quota tracking against the unified OpenAI subscription pool.
+          try {
+            const subId = modelToSubscriptionId(parsed.data.model ?? '') ?? 'codex';
+            void recordSubscriptionUsage(getPool(), subId, 0);
+          } catch (e) {
+            logger.warn({ e, callId }, 'failed to record subscription usage for passthrough');
+          }
+          if (parsed.data.stream) {
+            return reply
+              .header('Content-Type', 'text/event-stream; charset=utf-8')
+              .header('Cache-Control', 'no-cache')
+              .send(`data: ${JSON.stringify({ type: 'response.completed', response: respBody })}\n\ndata: [DONE]\n\n`);
+          }
+          return reply.send(respBody);
+        }
+        logger.warn({ callId, model: parsed.data.model, upstreamJson }, 'codex-bridge upstream non-OK; falling back to standard pipeline');
+      } catch (err) {
+        logger.error({ err, callId, model: parsed.data.model }, 'codex-bridge passthrough threw; falling back');
+      }
+    }
+
     const gatewayRequest = responsesRequestToGatewayRequest(parsed.data, request);
     const result = await executeCompletion(gatewayRequest, startMs, callId);
 

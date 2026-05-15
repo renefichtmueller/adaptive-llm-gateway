@@ -32,9 +32,8 @@ export const QUOTA_PROFILES: Record<string, QuotaProfile> = {
   'claude-code':           { subscriptionId: 'claude-code',           label: 'Claude Code (Pro)',         requestQuota: 45,   windowSeconds: 5 * 3600,  reset: 'rolling' },
   'github-copilot':        { subscriptionId: 'github-copilot',        label: 'GitHub Copilot',            requestQuota: null, windowSeconds: 30 * 86400, reset: 'fixed' },
   'microsoft-365-copilot': { subscriptionId: 'microsoft-365-copilot', label: 'M365 Copilot',              requestQuota: null, windowSeconds: 30 * 86400, reset: 'fixed' },
-  'chatgpt':               { subscriptionId: 'chatgpt',               label: 'ChatGPT Plus',              requestQuota: 80,   windowSeconds: 3 * 3600,  reset: 'rolling' },
   'gemini':                { subscriptionId: 'gemini',                label: 'Gemini Advanced',           requestQuota: null, windowSeconds: 30 * 86400, reset: 'fixed' },
-  'codex':                 { subscriptionId: 'codex',                 label: 'OpenAI Codex',              requestQuota: 150,  windowSeconds: 5 * 3600,  reset: 'rolling' },
+  'codex':                 { subscriptionId: 'codex',                 label: 'OpenAI (ChatGPT + Codex)',  requestQuota: 80,   windowSeconds: 3 * 3600,  reset: 'rolling' },
   'aider':                 { subscriptionId: 'aider',                 label: 'Aider',                     requestQuota: null, windowSeconds: 86400,     reset: 'fixed' },
 };
 
@@ -174,8 +173,7 @@ export async function getSubscriptionWallet(db: Pool): Promise<WalletEntry[]> {
 export function modelToSubscriptionId(model: string): string | null {
   const m = model.toLowerCase();
   if (m.startsWith('claude-') || m.includes('claude')) return 'claude-code';
-  if (m.startsWith('gpt-5.1-codex') || m === 'codex-mini-latest') return 'codex';
-  if (m.startsWith('gpt-')) return 'chatgpt';
+  if (m.startsWith('gpt-') || m === 'codex-mini-latest') return 'codex';  // ChatGPT + Codex share one OpenAI subscription
   if (m.startsWith('gemini-')) return 'gemini';
   if (m.startsWith('github-copilot') || m === 'copilot-chat') return 'github-copilot';
   if (m === 'microsoft-365-copilot' || m === 'm365-copilot-chat') return 'microsoft-365-copilot';
