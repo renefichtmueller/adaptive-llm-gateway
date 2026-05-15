@@ -98,10 +98,10 @@ async function buildServer() {
     .filter(Boolean);
   await server.register(fastifyCors, {
     origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3100',
-      'http://localhost:3103',
+      'http://localhost:0000',
+      'http://localhost:0000',
+      'http://localhost:0000',
+      'http://localhost:0000',
       ...corsAllowList,
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

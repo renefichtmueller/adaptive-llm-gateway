@@ -16,7 +16,7 @@ import { promisify } from 'util'
 import http from 'http'
 
 const exec = promisify(execFile)
-const PORT = process.env.COPILOT_BRIDGE_PORT || 3252
+const PORT = process.env.COPILOT_BRIDGE_PORT || 0
 const COPILOT_API_PORT = parseInt(process.env.COPILOT_API_INTERNAL_PORT || '4141')
 
 let copilotApiProcess = null

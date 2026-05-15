@@ -16,8 +16,8 @@ describe('Claude Code Integration with LLM Gateway', () => {
   let gatewayUrl: string;
 
   beforeAll(() => {
-    // Gateway must be running on localhost:3100 for these tests
-    gatewayUrl = process.env['LLM_GATEWAY_URL'] ?? 'http://localhost:3100';
+    // Gateway must be running on localhost:0000 for these tests
+    gatewayUrl = process.env['LLM_GATEWAY_URL'] ?? 'http://localhost:0000';
     client = new LLMGatewayClient({ caller: 'claude-code', baseUrl: gatewayUrl, timeout: 30_000 });
   });
 
@@ -132,7 +132,7 @@ describe('Claude Code Integration with LLM Gateway', () => {
     it('should retry Ollama on transient failures', async () => {
       const client2 = new LLMGatewayClient({
         caller: 'claude-code',
-        baseUrl: 'http://localhost:3100',
+        baseUrl: 'http://localhost:0000',
         ollamaUrl: 'http://localhost:11434',
         timeout: 30_000,
       });

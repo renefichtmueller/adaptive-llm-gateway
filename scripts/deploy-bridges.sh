@@ -15,7 +15,7 @@ import { createServer } from 'http'
 import { promisify } from 'util'
 
 const exec = promisify(execFile)
-const PORT = process.env.OPENAI_BRIDGE_PORT || 3251
+const PORT = process.env.OPENAI_BRIDGE_PORT || 0
 const API_KEY = process.env.OPENAI_API_KEY
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4-turbo'
 
@@ -171,4 +171,4 @@ echo "Next steps:"
 echo "1. Set OPENAI_API_KEY in ecosystem.config.cjs"
 echo "2. Run: pm2 start deploy/ecosystem.config.cjs --update-env"
 echo "3. Verify: pm2 status | grep openai-bridge"
-echo "4. Test: curl http://localhost:3251/health"
+echo "4. Test: curl http://localhost:0000/health"
