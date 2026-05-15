@@ -7,9 +7,9 @@ Exposes GitHub Copilot as an OpenAI-compatible API endpoint for LLM Gateway inte
 ```
 LLM Gateway
     ↓
-copilot-bridge (port 3252)
+copilot-bridge (port 0000)
     ↓
-GitHub Copilot API Proxy (copilot-api, port 4141)
+GitHub Copilot API Proxy (copilot-api, port 0000)
     ↓
 GitHub Copilot API (requires GitHub subscription)
 ```
@@ -65,14 +65,14 @@ node server.js
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `COPILOT_BRIDGE_PORT` | 3252 | Port for this wrapper |
-| `COPILOT_API_INTERNAL_PORT` | 4141 | Internal port for copilot-api |
+| `COPILOT_BRIDGE_PORT` | 0000 | Port for this wrapper |
+| `COPILOT_API_INTERNAL_PORT` | 0000 | Internal port for copilot-api |
 
 ### Example .env
 
 ```bash
 COPILOT_BRIDGE_PORT=0
-COPILOT_API_INTERNAL_PORT=4141
+COPILOT_API_INTERNAL_PORT=0000
 ```
 
 ## Running
@@ -84,8 +84,8 @@ npm start
 ```
 
 This will:
-1. Start the GitHub Copilot API proxy on port 4141
-2. Start the bridge wrapper on port 3252
+1. Start the GitHub Copilot API proxy on port 0000
+2. Start the bridge wrapper on port 0000
 3. Expose OpenAI-compatible `/v1/chat/completions` endpoint
 
 ### With PM2
@@ -109,7 +109,7 @@ Response:
   "status": "ok",
   "provider": "github-copilot",
   "version": "1.0.0",
-  "copilot_api_port": 4141,
+  "copilot_api_port": 0000,
   "healthy": true
 }
 ```
@@ -180,8 +180,8 @@ export const EXTERNAL_PROVIDERS: ExternalProviderConfig = {
       name: 'copilot-bridge',
       script: './server.js',
       env: {
-        COPILOT_BRIDGE_PORT: 3252,
-        COPILOT_API_INTERNAL_PORT: 4141
+        COPILOT_BRIDGE_PORT: 0000,
+        COPILOT_API_INTERNAL_PORT: 0000
       },
       error_file: '/var/log/llm-gateway/copilot-bridge.err.log',
       out_file: '/var/log/llm-gateway/copilot-bridge.out.log',
@@ -235,7 +235,7 @@ npm run auth
 ### Port Already in Use
 
 ```bash
-# Find process using port 4141
+# Find process using port 0000
 lsof -i :0000
 
 # Kill if needed
@@ -246,7 +246,7 @@ kill -9 <PID>
 
 ```bash
 # Test copilot-api directly
-npx copilot-api@latest start --port 4141 --verbose
+npx copilot-api@latest start --port 0000 --verbose
 
 # Check for GitHub subscription
 npm run debug

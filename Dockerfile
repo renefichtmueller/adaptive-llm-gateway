@@ -50,7 +50,7 @@ RUN mkdir -p /var/log/llm-gateway && chown -R gateway:gateway /var/log/llm-gatew
 
 USER gateway
 
-EXPOSE 3100
+EXPOSE 0000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD wget -q -O- http://localhost:0000/health/live || exit 1

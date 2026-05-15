@@ -71,7 +71,7 @@ async function processJob(job: PgBoss.Job<BatchJobData>): Promise<void> {
   logger.info({ jobId: job.id, caller, taskCount: tasks.length }, 'Processing batch job');
 
   const results: TaskResult[] = [];
-  const GATEWAY_URL = `http://localhost:${process.env['PORT'] ?? '3100'}`;
+  const GATEWAY_URL = `http://localhost:${process.env['PORT'] ?? '0000'}`;
 
   for (const task of tasks) {
     try {
