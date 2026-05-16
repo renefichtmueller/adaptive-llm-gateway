@@ -3,9 +3,18 @@ name: Traffic log
 # Persists daily GitHub traffic stats (clones, views, referrers, paths) into
 # docs/traffic-history/, so we keep a record beyond GitHub's 14-day window.
 #
-# Runs once a day at 04:15 UTC (after the daily bucket flips at 00:00 UTC,
-# with a 4h buffer for GitHub-side aggregation lag). The same workflow can
-# be triggered manually from the Actions tab via workflow_dispatch.
+# Setup required (one time):
+#   1. Create a Classic Personal Access Token with `repo` scope at
+#      https://github.com/settings/tokens
+#   2. Add it as the repository secret `TRAFFIC_TOKEN`
+#      (Settings -> Secrets and variables -> Actions -> New repository secret)
+#
+# Without that secret the workflow detects the missing scope, logs a hint,
+# and exits successfully so it does not spam failure notifications. The
+# Traffic API requires push or admin scope which the default GITHUB_TOKEN
+# does not have.
+#
+# Runs once a day at 04:15 UTC; can be triggered manually via workflow_dispatch.
 
 on:
   schedule:
@@ -24,39 +33,42 @@ jobs:
       - name: Fetch + append traffic snapshots
         env:
           # GITHUB_TOKEN cannot read /traffic/* — that endpoint requires push
-          # or admin scope. Set up a PAT (Classic, repo scope) as the secret
-          # `TRAFFIC_TOKEN`. Falls back to GITHUB_TOKEN so the workflow stays
-          # green for users who haven't configured the PAT yet (it will then
-          # produce 403s and skip, which is acceptable).
-          GH_TOKEN: ${{ secrets.TRAFFIC_TOKEN || secrets.GITHUB_TOKEN }}
+          # or admin scope. Without a configured TRAFFIC_TOKEN we exit cleanly
+          # so the schedule does not flood the notification inbox with 403s.
+          TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+
+          if [ -z "${TRAFFIC_TOKEN}" ]; then
+            echo "::notice title=traffic-log skipped::TRAFFIC_TOKEN secret is not configured. The GitHub Traffic API requires a PAT with repo scope — the default GITHUB_TOKEN cannot read it. See the workflow comment header for setup instructions. Exiting 0 so this run does not look like a failure."
+            exit 0
+          fi
+
+          export GH_TOKEN="${TRAFFIC_TOKEN}"
           mkdir -p docs/traffic-history
           STAMP=$(date -u +%Y-%m-%d)
 
-          # Each endpoint into its own dated JSON snapshot.
           for ep in clones views popular/referrers popular/paths; do
             slug=$(echo "$ep" | tr '/' '-')
             out="docs/traffic-history/${slug}.jsonl"
-            payload=$(gh api "repos/${REPO}/traffic/${ep}" 2>/dev/null) || continue
-            # /traffic/clones + /traffic/views return objects; /traffic/popular/*
-            # return arrays. Wrap into a date-tagged envelope so both shapes
-            # append cleanly into the same JSONL.
+            payload=$(gh api "repos/${REPO}/traffic/${ep}" 2>/dev/null) || {
+              echo "::warning::Failed to fetch /traffic/${ep} — likely a transient API error or scope mismatch."
+              continue
+            }
             jq -c --arg d "$STAMP" '{snapshot_date: $d, data: .}' <<<"$payload" >> "$out"
           done
 
-          # Maintain a tidy human-readable rollup CSV for quick eyeballing.
           ROLLUP=docs/traffic-history/daily-rollup.csv
           if [ ! -f "$ROLLUP" ]; then
             echo "date,unique_clones,total_clones,unique_views,total_views" > "$ROLLUP"
           fi
-          clones_uniq=$(gh api "repos/${REPO}/traffic/clones" --jq .uniques)
-          clones_tot=$(gh api "repos/${REPO}/traffic/clones"  --jq .count)
-          views_uniq=$(gh api "repos/${REPO}/traffic/views"   --jq .uniques)
-          views_tot=$(gh api "repos/${REPO}/traffic/views"    --jq .count)
-          # Avoid duplicating today's row if the workflow is run twice in one day.
-          if ! grep -q "^${STAMP}," "$ROLLUP"; then
+          clones_uniq=$(gh api "repos/${REPO}/traffic/clones" --jq .uniques 2>/dev/null || echo "")
+          clones_tot=$(gh api "repos/${REPO}/traffic/clones"  --jq .count   2>/dev/null || echo "")
+          views_uniq=$(gh api "repos/${REPO}/traffic/views"   --jq .uniques 2>/dev/null || echo "")
+          views_tot=$(gh api "repos/${REPO}/traffic/views"    --jq .count   2>/dev/null || echo "")
+
+          if [ -n "${clones_uniq}" ] && ! grep -q "^${STAMP}," "$ROLLUP"; then
             echo "${STAMP},${clones_uniq},${clones_tot},${views_uniq},${views_tot}" >> "$ROLLUP"
           fi
 
@@ -64,7 +76,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet docs/traffic-history; then
+          if ! git diff --quiet docs/traffic-history 2>/dev/null; then
             git add docs/traffic-history
             git commit -m "chore(traffic): daily snapshot $(date -u +%Y-%m-%d)"
             git push
