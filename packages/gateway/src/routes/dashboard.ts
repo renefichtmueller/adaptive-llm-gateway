@@ -164,8 +164,8 @@ const CLIENT_BRIDGE_PROVIDERS: Record<(typeof CLIENT_CATALOG)[number]['id'], str
   'claude-desktop': 'claude-code',
   'microsoft-copilot': 'm365-copilot-bridge',
   'github-copilot': 'copilot-bridge',
-  chatgpt: 'chatgpt-bridge',
   'openai-compatible': undefined,
+  'chatgpt': 'codex-bridge',
 };
 
 function expandUserPath(path: string): string {
@@ -320,8 +320,6 @@ function bridgeHealthUrl(providerName: string): string | undefined {
   const bridgeUrls: Record<string, string | undefined> = {
     'claude-bridge': process.env['CLAUDE_BRIDGE_URL'],
     'claude-code': process.env['CLAUDE_CODE_URL'] || process.env['CLAUDE_BRIDGE_URL'],
-    'openai-bridge': process.env['OPENAI_BRIDGE_URL'],
-    'chatgpt-bridge': process.env['CHATGPT_BRIDGE_URL'] || process.env['OPENAI_BRIDGE_URL'],
     'copilot-bridge': process.env['COPILOT_BRIDGE_URL'],
     'm365-copilot-bridge': process.env['M365_COPILOT_BRIDGE_URL'],
     'openai-codex': process.env['OPENAI_CODEX_URL'] || process.env['CODEX_BRIDGE_URL'],
@@ -604,7 +602,7 @@ export async function dashboardRoute(fastify: FastifyInstance): Promise<void> {
     const configuredProviders = providers.filter((provider) => provider.enabled && !!process.env[provider.envKey]);
     const localProviders = providers.filter((provider) => provider.name.toLowerCase().includes('ollama'));
     const subscriptionProviders = providers.filter((provider) =>
-      ['claude-bridge', 'claude-code', 'openai-bridge', 'chatgpt-bridge', 'copilot-bridge', 'm365-copilot-bridge', 'codex', 'openai-codex']
+      ['claude-bridge', 'claude-code', 'copilot-bridge', 'm365-copilot-bridge', 'codex', 'openai-codex']
         .includes(provider.name)
     );
 
@@ -912,12 +910,10 @@ export async function dashboardRoute(fastify: FastifyInstance): Promise<void> {
       const displayLabels: Record<string, string> = {
         'claude-bridge': 'Claude Code Subscription (Bridge)',
         'claude-code': 'Claude Code Direct',
-        'openai-bridge': 'OpenAI ChatGPT Subscription (Bridge)',
-        'chatgpt-bridge': 'ChatGPT Plus Subscription (Bridge)',
         'copilot-bridge': 'GitHub Copilot Subscription',
         'm365-copilot-bridge': 'Microsoft 365 Copilot Subscription',
         'codex': 'GitHub Copilot Codex (Inner API)',
-        'openai-codex': 'OpenAI API (Codex / GPT)',
+        'openai-codex': 'OpenAI (ChatGPT + Codex)',
         'cerebras': 'Cerebras (Free Tier)',
         'groq': 'Groq (Free Tier)',
         'mistral': 'Mistral AI (Free Tier)',
@@ -928,7 +924,6 @@ export async function dashboardRoute(fastify: FastifyInstance): Promise<void> {
       // Subscription providers (paid via login/subscription, NOT free-tier API)
       const subscriptionNames = new Set([
         'claude-bridge', 'claude-code',
-        'openai-bridge', 'chatgpt-bridge',
         'copilot-bridge', 'm365-copilot-bridge', 'codex', 'openai-codex'
       ]);
 
