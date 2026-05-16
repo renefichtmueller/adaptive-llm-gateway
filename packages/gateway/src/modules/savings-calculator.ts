@@ -265,3 +265,69 @@ export async function getComprehensiveSavings(
 
   return empty;
 }
+
+/**
+ * Compression metrics since a given ISO timestamp — typically the gateway's
+ * own startup time. Used by the dashboard 'Compressed since last (weekly)
+ * restart' tile so operators can see how much pipeline-pressure has built up
+ * since the process was last cycled.
+ *
+ * Pulls from tokenvault_metrics (the canonical per-call compression log).
+ * Returns zero if the table is missing or the query errors — never throws
+ * so the dashboard endpoint stays resilient.
+ */
+export interface CompressionSinceRestart {
+  sinceISO: string;
+  operations: number;
+  tokensIn: number;
+  tokensOut: number;
+  tokensSaved: number;
+  savingsPct: number;
+}
+
+export async function getCompressionSinceRestart(
+  db: Pool,
+  sinceISO: string,
+): Promise<CompressionSinceRestart> {
+  const empty: CompressionSinceRestart = {
+    sinceISO,
+    operations: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+    tokensSaved: 0,
+    savingsPct: 0,
+  };
+  try {
+    const { rows } = await db.query<{
+      ops: string;
+      tokens_in: string;
+      tokens_out: string;
+      tokens_saved: string;
+    }>(
+      `SELECT
+         COUNT(*)::text                                                   AS ops,
+         COALESCE(SUM(tokens_before), 0)::text                            AS tokens_in,
+         COALESCE(SUM(tokens_after), 0)::text                             AS tokens_out,
+         COALESCE(SUM(tokens_before) - SUM(tokens_after), 0)::text        AS tokens_saved
+       FROM tokenvault_metrics
+       WHERE created_at >= $1::timestamptz`,
+      [sinceISO],
+    );
+    if (!rows[0]) return empty;
+    const ops = Number(rows[0].ops) || 0;
+    const tIn = Number(rows[0].tokens_in) || 0;
+    const tOut = Number(rows[0].tokens_out) || 0;
+    const tSaved = Number(rows[0].tokens_saved) || 0;
+    return {
+      sinceISO,
+      operations: ops,
+      tokensIn: tIn,
+      tokensOut: tOut,
+      tokensSaved: tSaved,
+      savingsPct: tIn > 0 ? Math.round((tSaved / tIn) * 10000) / 100 : 0,
+    };
+  } catch (err) {
+    logger.debug({ err }, 'savings: since-restart compression query failed');
+    return empty;
+  }
+}

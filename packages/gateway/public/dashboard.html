@@ -1685,6 +1685,11 @@
           <div class="metric-value" id="cacheHitRate">0<span class="metric-unit">%</span></div>
           <div class="metric-change">hits ÷ total req</div>
         </div>
+        <div class="metric">
+          <div class="metric-label">compressed since last restart</div>
+          <div class="metric-value" id="compressedSinceRestart">0</div>
+          <div class="metric-change" id="compressedSinceRestartMeta">— · — ops · since —</div>
+        </div>
       </div>
 
       <h2 class="h-section">Top Caching Callers <span class="h-meta">most savings</span></h2>
@@ -2700,6 +2705,11 @@
       document.getElementById('cacheEntries').textContent = formatNumber(s.uniqueEntries);
       document.getElementById('tokensPrevented').textContent = formatNumber(s.totalTokensSaved);
       document.getElementById('cacheHitRate').innerHTML = s.hitRatePercent.toFixed(1) + '<span class="metric-unit">%</span>';
+      const sr = s.sinceRestart || {};
+      document.getElementById('compressedSinceRestart').textContent = formatNumber(sr.tokensSaved || 0);
+      const sinceLabel = sr.sinceISO ? new Date(sr.sinceISO).toLocaleString() : '—';
+      const pctTxt = (sr.savingsPct || 0).toFixed(1) + '%';
+      document.getElementById('compressedSinceRestartMeta').textContent = pctTxt + ' · ' + (sr.operations || 0) + ' ops · since ' + sinceLabel;
 
       // Tab badge
       document.getElementById('savingsTabBadge').textContent = s.totalHits > 0 ? formatCost(s.totalCostSaved) : '·';

@@ -18,7 +18,11 @@ import {
   clearCacheForCaller,
   pruneStaleCacheEntries,
 } from '../modules/response-cache.js';
-import { getComprehensiveSavings } from '../modules/savings-calculator.js';
+import { getComprehensiveSavings, getCompressionSinceRestart } from '../modules/savings-calculator.js';
+
+// Captured once at module load — represents the gateway-process start time
+// for the 'compressed since last restart' tile in the dashboard.
+const SERVER_STARTED_AT_ISO = new Date().toISOString();
 import {
   getBuddyState,
   getAchievements,
@@ -1192,10 +1196,11 @@ export async function dashboardRoute(fastify: FastifyInstance): Promise<void> {
       const hours = Math.min(parseInt((request.query as any).hours as string) || 24, 8760);
       const bucketMin = Math.max(parseInt((request.query as any).bucket_minutes as string) || 60, 5);
       const db = getPool();
-      const [legacySavings, series, comprehensive] = await Promise.all([
+      const [legacySavings, series, comprehensive, sinceRestart] = await Promise.all([
         getCacheSavings(db, hours),                    // legacy field for backwards compat
         getSavingsTimeSeries(db, hours, bucketMin),
         getComprehensiveSavings(db, hours),
+        getCompressionSinceRestart(db, SERVER_STARTED_AT_ISO),
       ]);
       const realCostSaved = Math.max(comprehensive.totalCostSaved, legacySavings.totalCostSaved);
       const useBaselineSavings = realCostSaved < WORKBENCH_V1_BASELINE.totalCostSaved;
@@ -1234,6 +1239,8 @@ export async function dashboardRoute(fastify: FastifyInstance): Promise<void> {
               effectiveSavingsPercent,
               totals: comprehensive.totals,
             },
+            // Compression since this gateway process started — resets at each restart.
+            sinceRestart,
           },
           series,
         },
