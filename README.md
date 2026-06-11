@@ -31,6 +31,21 @@
 
 ---
 
+## Table of Contents
+1. [The 30-second pitch](#the-30-second-pitch)
+2. [Why this exists (long version)](#why-this-exists-long-version)
+3. [Compared to other gateways](#compared-to-other-gateways)
+4. [Screenshots](#screenshots)
+5. [Core features in detail](#core-features-in-detail)
+6. [Quick start](#quick-start)
+7. [Architecture](#architecture)
+8. [Endpoints](#endpoints)
+9. [Configuration](#configuration)
+10. [License](#license)
+11. [Prior art / acknowledgments](#prior-art--acknowledgments)
+12. [Contributing](#contributing)
+13. [Security](#security)
+
 ## The 30-second pitch
 
 You probably pay $200–$500/month for AI subscriptions: **Claude Code Max, ChatGPT Plus, GitHub Copilot, Microsoft 365 Copilot, Gemini Advanced, OpenAI Codex CLI**, maybe Aider — plus you run **Ollama** or **LM Studio** locally for free.
@@ -162,6 +177,7 @@ Reads `llm_calls` every 15 min, groups by (`task_type`, `model_used`), computes 
 ### 🔌 MCP Server Mode
 
 ```bash
+
 # Add to Claude Desktop's mcp.json:
 {
   "mcpServers": {
@@ -210,6 +226,7 @@ git clone https://github.com/renefichtmueller/adaptive-llm-gateway.git
 cd adaptive-llm-gateway
 npm install
 cp .env.example .env
+
 # minimum: set DATABASE_URL
 npm --workspace=packages/gateway run build
 npm --workspace=packages/gateway start
