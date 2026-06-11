@@ -2,6 +2,20 @@
 
 # Adaptive LLM Gateway
 
+
+<!-- AUTO-PACKAGE-BADGES:START -->
+<!-- Auto-generated package badges -->
+
+![npm version](https://img.shields.io/npm/v/%40llm-gateway%2Fchatgpt-api-adapter?style=flat-square&logo=npm&color=blue) ![npm downloads](https://img.shields.io/npm/dw/%40llm-gateway%2Fchatgpt-api-adapter?style=flat-square&color=brightgreen) ![npm license](https://img.shields.io/npm/l/%40llm-gateway%2Fchatgpt-api-adapter?style=flat-square) [![Deployed](https://img.shields.io/badge/deployed-1.0.0-blue?style=flat-square)](https://www.npmjs.com/package/@llm-gateway/chatgpt-api-adapter)
+![npm version](https://img.shields.io/npm/v/%40llm-gateway%2Fclaude-code-bridge?style=flat-square&logo=npm&color=blue) ![npm downloads](https://img.shields.io/npm/dw/%40llm-gateway%2Fclaude-code-bridge?style=flat-square&color=brightgreen) ![npm license](https://img.shields.io/npm/l/%40llm-gateway%2Fclaude-code-bridge?style=flat-square) [![Deployed](https://img.shields.io/badge/deployed-1.0.0-blue?style=flat-square)](https://www.npmjs.com/package/@llm-gateway/claude-code-bridge)
+![npm version](https://img.shields.io/npm/v/%40llm-gateway%2Fclient?style=flat-square&logo=npm&color=blue) ![npm downloads](https://img.shields.io/npm/dw/%40llm-gateway%2Fclient?style=flat-square&color=brightgreen) ![npm license](https://img.shields.io/npm/l/%40llm-gateway%2Fclient?style=flat-square) [![Deployed](https://img.shields.io/badge/deployed-1.0.0-blue?style=flat-square)](https://www.npmjs.com/package/@llm-gateway/client)
+![npm version](https://img.shields.io/npm/v/%40llm-gateway%2Fcodex-lsp-adapter?style=flat-square&logo=npm&color=blue) ![npm downloads](https://img.shields.io/npm/dw/%40llm-gateway%2Fcodex-lsp-adapter?style=flat-square&color=brightgreen) ![npm license](https://img.shields.io/npm/l/%40llm-gateway%2Fcodex-lsp-adapter?style=flat-square) [![Deployed](https://img.shields.io/badge/deployed-1.0.0-blue?style=flat-square)](https://www.npmjs.com/package/@llm-gateway/codex-lsp-adapter)
+![npm version](https://img.shields.io/npm/v/%40llm-gateway%2Fgateway?style=flat-square&logo=npm&color=blue) ![npm downloads](https://img.shields.io/npm/dw/%40llm-gateway%2Fgateway?style=flat-square&color=brightgreen) ![npm license](https://img.shields.io/npm/l/%40llm-gateway%2Fgateway?style=flat-square) [![Deployed](https://img.shields.io/badge/deployed-1.0.0-blue?style=flat-square)](https://www.npmjs.com/package/@llm-gateway/gateway)
+![npm version](https://img.shields.io/npm/v/%40llm-gateway%2Flearning-integration?style=flat-square&logo=npm&color=blue) ![npm downloads](https://img.shields.io/npm/dw/%40llm-gateway%2Flearning-integration?style=flat-square&color=brightgreen) ![npm license](https://img.shields.io/npm/l/%40llm-gateway%2Flearning-integration?style=flat-square) [![Deployed](https://img.shields.io/badge/deployed-1.0.0-blue?style=flat-square)](https://www.npmjs.com/package/@llm-gateway/learning-integration)
+![npm version](https://img.shields.io/npm/v/%40llm-gateway%2Flearning?style=flat-square&logo=npm&color=blue) ![npm downloads](https://img.shields.io/npm/dw/%40llm-gateway%2Flearning?style=flat-square&color=brightgreen) ![npm license](https://img.shields.io/npm/l/%40llm-gateway%2Flearning?style=flat-square) [![Deployed](https://img.shields.io/badge/deployed-1.0.0-blue?style=flat-square)](https://www.npmjs.com/package/@llm-gateway/learning)
+![npm version](https://img.shields.io/npm/v/%40llm-gateway%2Fprompt-optimizer?style=flat-square&logo=npm&color=blue) ![npm downloads](https://img.shields.io/npm/dw/%40llm-gateway%2Fprompt-optimizer?style=flat-square&color=brightgreen) ![npm license](https://img.shields.io/npm/l/%40llm-gateway%2Fprompt-optimizer?style=flat-square) [![Deployed](https://img.shields.io/badge/deployed-0.1.0-blue?style=flat-square)](https://www.npmjs.com/package/@llm-gateway/prompt-optimizer)
+
+<!-- AUTO-PACKAGE-BADGES:END -->
 **The most feature-complete open-source LLM gateway — built for the era where you already pay for five AI subscriptions.**
 
 [![CI](https://github.com/renefichtmueller/adaptive-llm-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/renefichtmueller/adaptive-llm-gateway/actions/workflows/ci.yml)
@@ -16,6 +30,21 @@
 > ⚠️ **Status**: v0.3 — experimental. Battle-tested on a small private deployment, not yet stress-tested at enterprise scale. APIs may change before v1.0.
 
 ---
+
+## Table of Contents
+1. [The 30-second pitch](#the-30-second-pitch)
+2. [Why this exists (long version)](#why-this-exists-long-version)
+3. [Compared to other gateways](#compared-to-other-gateways)
+4. [Screenshots](#screenshots)
+5. [Core features in detail](#core-features-in-detail)
+6. [Quick start](#quick-start)
+7. [Architecture](#architecture)
+8. [Endpoints](#endpoints)
+9. [Configuration](#configuration)
+10. [License](#license)
+11. [Prior art / acknowledgments](#prior-art--acknowledgments)
+12. [Contributing](#contributing)
+13. [Security](#security)
 
 ## The 30-second pitch
 
@@ -148,6 +177,7 @@ Reads `llm_calls` every 15 min, groups by (`task_type`, `model_used`), computes 
 ### 🔌 MCP Server Mode
 
 ```bash
+
 # Add to Claude Desktop's mcp.json:
 {
   "mcpServers": {
@@ -196,6 +226,7 @@ git clone https://github.com/renefichtmueller/adaptive-llm-gateway.git
 cd adaptive-llm-gateway
 npm install
 cp .env.example .env
+
 # minimum: set DATABASE_URL
 npm --workspace=packages/gateway run build
 npm --workspace=packages/gateway start
