@@ -2,7 +2,7 @@ import { jwtVerify } from 'jose';
 import { logger } from '../observability/logger.js';
 
 const ALLOWED_ALGORITHMS = ['RS256', 'HS256'] as const;
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export interface JWTValidationResult {
   passed: boolean;
@@ -48,6 +48,11 @@ export async function validateJWT(token: string): Promise<JWTValidationResult> {
 
     if (header.alg === 'none') {
       errors.push('Algorithm "none" is not allowed (security risk)');
+      return { passed: false, score_impact: -2.0, errors };
+    }
+
+    if (!JWT_SECRET) {
+      errors.push('JWT_SECRET is not configured — refusing to validate (fail-closed)');
       return { passed: false, score_impact: -2.0, errors };
     }
 

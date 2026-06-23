@@ -1,0 +1,19 @@
+title = "adaptive-llm-gateway gitleaks config"
+
+# Keep all default rules, but allowlist the well-known PUBLIC example values that
+# are intentional test fixtures for the PII/secret redactor (they are not real
+# secrets). Everything else — including any real secret in any other file — is
+# still fully scanned.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public textbook example tokens used as redaction-test fixtures (not real secrets)"
+regexes = [
+  # the canonical jwt.io example token (HS256, sub 1234567890)
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c''',
+]
+paths = [
+  # the PII-redaction unit test deliberately contains example secrets to verify masking
+  '''packages/gateway/src/modules/__tests__/pii-redaction\.test\.ts''',
+]
