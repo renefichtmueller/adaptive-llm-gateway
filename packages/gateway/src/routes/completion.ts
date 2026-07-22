@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { classifyInput } from '../pipeline/pre-classifier.js';
+import { tryScorerFastPath } from '../pipeline/scorer-fastpath.js';
 import { route } from '../pipeline/router.js';
 import { detectCaller } from '../modules/caller-detection.js';
 import {
@@ -243,6 +244,19 @@ interface GatewayCompletionResult {
 async function classifyAndRoute(taskType: string | undefined, caller: string, input: string, options: CompletionRequest['options']): Promise<{ taskType: string; decision: ReturnType<typeof route>; classificationResult?: unknown }> {
   let resolved = taskType;
   let classificationResult;
+  if (!resolved) {
+    // Fast-path: the cheap keyword scorer can classify clearly-simple requests
+    // without an LLM round-trip. Opt-in (SCORER_FASTPATH_ENABLED), default off,
+    // so behaviour is unchanged until enabled. See scorer-fastpath.ts.
+    const fastPath = tryScorerFastPath(input);
+    if (fastPath) {
+      resolved = fastPath.taskType;
+      logger.debug(
+        { tier: fastPath.tier, confidence: fastPath.confidence, taskType: resolved },
+        'Scorer fast-path: routed without LLM pre-classifier',
+      );
+    }
+  }
   if (!resolved) {
     try {
       classificationResult = await classifyInput(input);
