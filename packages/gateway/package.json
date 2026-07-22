@@ -7,7 +7,9 @@
     "build": "tsc && npm run build:copy-assets",
     "build:copy-assets": "mkdir -p dist/db/migrations dist/config dist/public && cp -r src/db/migrations/*.sql dist/db/migrations/ 2>/dev/null || true && cp -r src/config/*.yaml dist/config/ 2>/dev/null || true && cp -r public/* dist/public/ 2>/dev/null || true",
     "start": "node dist/server.js",
-    "test": "vitest"
+    "test": "vitest run src",
+    "test:integration": "vitest run tests/integration",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@fastify/cors": "^10.1.0",
