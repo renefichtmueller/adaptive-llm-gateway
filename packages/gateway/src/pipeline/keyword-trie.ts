@@ -73,7 +73,18 @@ export class KeywordTrie {
    * Returns raw matches — call `aggregate()` for dimension-level results.
    */
   scan(text: string): readonly TrieMatch[] {
-    const input = text.toLowerCase().slice(0, MAX_SCAN_LENGTH);
+    const lower = text.toLowerCase();
+    // Instructions frequently trail long pasted context (logs, docs, RAG
+    // chunks), so for over-budget text scan a head window AND a tail window
+    // rather than the head alone — otherwise a trailing "write a function …"
+    // past MAX_SCAN_LENGTH is never seen. Total work stays within the budget.
+    let input: string;
+    if (lower.length <= MAX_SCAN_LENGTH) {
+      input = lower;
+    } else {
+      const half = Math.floor(MAX_SCAN_LENGTH / 2);
+      input = `${lower.slice(0, half)}\n${lower.slice(lower.length - half)}`;
+    }
     const matches: TrieMatch[] = [];
     const len = input.length;
 

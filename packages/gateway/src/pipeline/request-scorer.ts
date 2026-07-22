@@ -84,6 +84,12 @@ const KEYWORD_DIMENSIONS: ReadonlyArray<DimensionDef & { readonly keywords: read
       'create a service', 'write a handler', 'write middleware', 'generate types',
       'write a query', 'create a schema', 'implement crud', 'write unit test',
       'create endpoint', 'write migration', 'scaffold project',
+      // Flexible phrasings — the keyword trie matches contiguous substrings, so
+      // "write a function" misses "write a TypeScript function"; these catch the
+      // common "<verb> a <lang> function/script/component/class …" prompts.
+      'function that', 'script that', 'class that', 'react component',
+      'vue component', 'create a component', 'create a react', 'python script',
+      'write a program', 'write a class',
     ],
   },
   {
@@ -732,12 +738,14 @@ function handleFormalLogicOverride(
 
 interface ScoreOverridesInput {
   tier: Tier;
+  score: number;
   confidence: number;
   reason: string;
 }
 
 interface ScoreOverridesOutput {
   tier: Tier;
+  score: number;
   confidence: number;
   reason: string;
 }
@@ -748,14 +756,7 @@ function applyScoreOverrides(
   input: ScorerInput,
   totalChars: number,
 ): ScoreOverridesOutput {
-  let { tier, confidence, reason } = state;
-
-  // Code generation override
-  const codeGenDim = dimensions.find((d) => d.name === 'codeGeneration');
-  if (codeGenDim && codeGenDim.rawScore > 0.25) {
-    tier = 'code_generation';
-    reason = 'code generation keywords detected';
-  }
+  let { tier, score, confidence, reason } = state;
 
   // Tool floor
   if (input.tools && input.tools.length > 0 && tier === 'fast') {
@@ -776,7 +777,19 @@ function applyScoreOverrides(
     reason = 'ambiguous (confidence < 0.45, defaulting to medium)';
   }
 
-  return { tier, confidence, reason };
+  // Code generation override — authoritative, runs last so a detected code-gen
+  // signal wins over the tool/context/ambiguity floors above (a short but clear
+  // "write a function …" must not be demoted to medium). When it fires we also
+  // pin score + confidence into the code_generation band so all three agree.
+  const codeGenDim = dimensions.find((d) => d.name === 'codeGeneration');
+  if (codeGenDim && codeGenDim.rawScore > 0.25) {
+    tier = 'code_generation';
+    reason = 'code generation keywords detected';
+    score = Math.max(score, TIER_BOUNDARIES.reasoning + 0.01);
+    confidence = Math.max(confidence, 0.8);
+  }
+
+  return { tier, score, confidence, reason };
 }
 
 // ── Main Scoring Function ──────────────────────────────────────────────────
@@ -802,15 +815,15 @@ export function scoreRequest(
   }
 
   const momentum = computeSessionMomentum(lastUserText.length);
-  const score = rawScore + momentum;
+  let score = rawScore + momentum;
 
   let tier = assignTier(score);
   let confidence = computeConfidence(score);
   let reason = `scored ${score.toFixed(4)} across 23 dimensions`;
 
   const totalChars = input.messages.reduce((sum, m) => sum + (m.content?.length ?? 0), 0);
-  const overrides = applyScoreOverrides({ tier, confidence, reason }, dimensions, input, totalChars);
-  ({ tier, confidence, reason } = overrides);
+  const overrides = applyScoreOverrides({ tier, score, confidence, reason }, dimensions, input, totalChars);
+  ({ tier, score, confidence, reason } = overrides);
 
   recordSessionTier(tier);
 
