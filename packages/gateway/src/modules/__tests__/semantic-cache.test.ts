@@ -18,10 +18,20 @@ const {
   __resetSemanticCache,
 } = await import('../semantic-cache.js');
 
-/** Build a fake 4-dim vector based on a seed character so similar inputs get similar vectors */
+/**
+ * Build a fake 4-dim embedding whose DIRECTION depends on the whole input.
+ * The earlier version returned code * [1/100, 1/200, 1/300, 1/400] — every
+ * input was a scalar multiple of the same base vector, so cosine similarity
+ * (which ignores magnitude) was 1.0 for ANY pair, making distinct prompts
+ * like "a" and "zzz" collide. Spreading char codes across dimensions gives
+ * distinct prompts distinct directions while identical prompts stay identical.
+ */
 function fakeVector(seed: string): number[] {
-  const code = seed.charCodeAt(0) || 1;
-  return [code / 100, code / 200, code / 300, code / 400];
+  const v = [1, 1, 1, 1];
+  for (let i = 0; i < seed.length; i++) {
+    v[i % 4]! += seed.charCodeAt(i);
+  }
+  return v;
 }
 
 const originalFetch = global.fetch;

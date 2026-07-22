@@ -89,18 +89,22 @@ const RULES: readonly DetectionRule[] = [
   // Email — RFC 5322-ish simplified
   { category: 'email', pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}\b/g },
 
-  // International phone numbers (loose; E.164-style)
-  { category: 'phone', pattern: /\b(?:\+|00)\d{1,3}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}(?:[\s.-]?\d{1,4})?\b/g },
-  // German national format (0xxx-xxxx-xxxx)
-  { category: 'phone', pattern: /\b0\d{2,4}[\s.-]\d{3,4}[\s.-]\d{3,4}\b/g },
+  // IBAN (mod-97 validated) — must run before credit_card and phone so its
+  // interior digit groups aren't nibbled by those looser numeric patterns.
+  { category: 'iban', pattern: /\b[A-Z]{2}\d{2}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b/g, validator: ibanValid },
 
-  // Credit cards (with Luhn validation)
+  // Credit cards (Luhn validated) — before phone for the same reason.
   { category: 'credit_card', pattern: /\b(?:\d{4}[\s-]?){3}\d{4}\b/g, validator: luhnValid },
   // Amex 15-digit
   { category: 'credit_card', pattern: /\b\d{4}[\s-]?\d{6}[\s-]?\d{5}\b/g, validator: luhnValid },
 
-  // IBAN
-  { category: 'iban', pattern: /\b[A-Z]{2}\d{2}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b/g, validator: ibanValid },
+  // Phone numbers (loose) — run AFTER the validated identifiers above so the
+  // German pattern can't swallow digit groups inside an IBAN or a card number.
+  // International (E.164-style): leading (?<!\d) rather than \b, because \b
+  // never matches between a space and a leading "+", so "+1 555 …" was missed.
+  { category: 'phone', pattern: /(?<!\d)(?:\+|00)\d{1,3}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}(?:[\s.-]?\d{1,4})?\b/g },
+  // German national format (0xxx-xxxx-xxxx)
+  { category: 'phone', pattern: /\b0\d{2,4}[\s.-]\d{3,4}[\s.-]\d{3,4}\b/g },
 
   // US SSN (XXX-XX-XXXX)
   { category: 'ssn', pattern: /\b\d{3}-\d{2}-\d{4}\b/g },
