@@ -311,3 +311,86 @@ export function createBatchClient(caller: string, baseUrl?: string): LLMGatewayC
 export function createRealtimeClient(caller: string, baseUrl?: string): LLMGatewayClient {
   return new LLMGatewayClient({ caller, baseUrl, timeout: 5_000 });
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// TIP client (compatibility)
+//
+// The subscription bridges (chatgpt-api-adapter, claude-code-bridge) were
+// written against an older "TIP client" surface: `createTIPClient(config)`
+// returning a client whose `completion(prompt, options)` yields
+// `{ text, tokens: { input, output }, model, fallback, confidence }`.
+// The client was later refactored to `LLMGatewayClient` with an object-shaped
+// `completion({ task_type, input, options })` → `CompletionResponse`, but those
+// consumers were never updated, so they failed at import with
+// "createTIPClient is not a function". This shim maps the old contract onto the
+// current client so the bridges work again without rewriting them.
+// ──────────────────────────────────────────────────────────────────────────
+
+export interface TIPClientConfig {
+  /** Identifies the calling agent/service (maps to the gateway `caller`). */
+  agentId: string;
+  baseUrl?: string;
+  ollamaUrl?: string;
+  timeout?: number;
+}
+
+export interface TIPCompletionOptions {
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+  /** Task type routed by the gateway (defaults to 'generic_qa'). */
+  taskType?: string;
+  /** Free-form metadata forwarded as prompt context. */
+  metadata?: Record<string, unknown>;
+}
+
+export interface TIPCompletionResult {
+  text: string;
+  tokens: { input: number; output: number };
+  model: string;
+  /** True when the request was served by the local Ollama fallback. */
+  fallback: boolean;
+  confidence: number;
+}
+
+export interface TIPClient {
+  completion(prompt: string, options?: TIPCompletionOptions): Promise<TIPCompletionResult>;
+  health(): ReturnType<LLMGatewayClient['health']>;
+  getStatus(): ReturnType<LLMGatewayClient['getStatus']>;
+}
+
+/**
+ * Create a backward-compatible TIP client backed by {@link LLMGatewayClient}.
+ */
+export function createTIPClient(config: TIPClientConfig): TIPClient {
+  const client = new LLMGatewayClient({
+    caller: config.agentId,
+    baseUrl: config.baseUrl,
+    ollamaUrl: config.ollamaUrl,
+    timeout: config.timeout,
+  });
+
+  return {
+    async completion(prompt, options = {}): Promise<TIPCompletionResult> {
+      const res = await client.completion({
+        task_type: options.taskType ?? 'generic_qa',
+        input: prompt,
+        ...(options.metadata ? { context: options.metadata } : {}),
+        options: {
+          ...(options.model ? { model: options.model } : {}),
+          ...(options.temperature != null ? { temperature: options.temperature } : {}),
+          ...(options.maxTokens != null ? { max_tokens: options.maxTokens } : {}),
+        },
+      });
+      return {
+        text: res.output,
+        tokens: { input: res.tokens.in, output: res.tokens.out },
+        model: res.model,
+        fallback: client.getStatus().mode === 'fallback',
+        confidence: res.confidence,
+      };
+    },
+    health: () => client.health(),
+    getStatus: () => client.getStatus(),
+  };
+}
