@@ -1,63 +1,129 @@
 # ─── Models known to the gateway ──────────────────────────────────────────
-# Each entry maps a model alias to its tier, context length, and provider.
-# Auto-discovery fills in the runtime-detected models from your local Ollama
-# server at startup. You can also declare extra models here manually.
+# Each entry maps a model alias to its tier, context length, provider, and
+# routing metadata. Auto-discovery fills in runtime-detected Ollama models at
+# startup; you can also declare extra models here manually.
+#
+# Schema note: `tiers`, `fallback_chains`, and `tier_fallback` below are read
+# directly by the router (packages/gateway/src/pipeline/router.ts). Keep the
+# tier keys in sync with the tiers referenced by routing-rules.yaml.
 
 ollama_base_url: "http://localhost:11434"
 
+# ─── Tier execution semantics (timeout + circuit breaker) ─────────────────
+tiers:
+  fast:
+    timeout_ms: 15000
+    error_threshold_percent: 50
+    circuit_breaker_reset_ms: 30000
+  medium:
+    timeout_ms: 60000
+    error_threshold_percent: 50
+    circuit_breaker_reset_ms: 45000
+  large:
+    timeout_ms: 180000
+    error_threshold_percent: 50
+    circuit_breaker_reset_ms: 60000
+
+# ─── Known models ─────────────────────────────────────────────────────────
 models:
   # ─── Local Ollama (auto-detected at runtime) ────────────────────────────
   qwen2.5:3b:
     tier: fast
     context_length: 32768
     provider: ollama
+    strengths: [classification, banlist, simple_qa]
+    max_tokens_default: 2048
     description: "Lightweight model — pre-classifier, simple Q&A, banlist detection"
 
   qwen2.5:7b-instruct:
     tier: fast
     context_length: 32768
     provider: ollama
+    strengths: [short_tasks, instructions]
+    max_tokens_default: 2048
     description: "Fast instruction-tuned model for short tasks"
 
   qwen2.5-coder:7b-instruct:
     tier: fast
     context_length: 32768
     provider: ollama
+    strengths: [code_review, code_small]
+    max_tokens_default: 4096
     description: "Code-focused variant of qwen2.5"
 
   qwen2.5:14b:
     tier: medium
     context_length: 131072
     provider: ollama
+    strengths: [general, summarize, rewrite]
+    max_tokens_default: 2048
     description: "Default medium-tier workhorse"
 
   qwen2.5:32b:
     tier: large
     context_length: 131072
     provider: ollama
+    strengths: [reasoning, long_context, code_generation]
+    max_tokens_default: 4096
     description: "Heavy reasoning, blog generation, long-context tasks"
 
-  llama3.3:70b:
-    tier: reasoning
+  deepseek-r1:32b:
+    tier: large
     context_length: 131072
     provider: ollama
+    strengths: [reasoning, code_generation]
+    max_tokens_default: 4096
+    description: "Reasoning-tuned model; first large-tier fallback"
+
+  llama3.3:70b:
+    tier: large
+    context_length: 131072
+    provider: ollama
+    strengths: [complex_reasoning]
+    max_tokens_default: 4096
     description: "Highest local reasoning quality (requires significant RAM)"
 
   # ─── Subscription bridges (auto-detected via subscription-discovery) ─────
+  gpt-4-turbo:
+    tier: large
+    context_length: 128000
+    provider: openai-codex
+    strengths: [code_generation]
+    max_tokens_default: 4096
+    description: "Code-generation primary, routed via OpenAI Codex subscription"
+
   claude-sonnet-4-5:
     tier: large
     context_length: 200000
     provider: claude-bridge
+    strengths: [general, code, long_context]
+    max_tokens_default: 8192
     description: "Routed via Claude Code Max subscription"
 
   gpt-4o:
     tier: large
     context_length: 128000
     provider: openai-bridge
+    strengths: [general, code]
+    max_tokens_default: 4096
     description: "Routed via ChatGPT Plus / Pro subscription"
 
+# ─── Fallback chains per tier (ordered) ───────────────────────────────────
+# buildFallbackChain() prepends the selected primary model, then appends these
+# (minus the primary). The large chain leads with deepseek-r1:32b so a strong
+# local reasoner backs up code generation before the 70B.
+fallback_chains:
+  fast:   [qwen2.5:3b, qwen2.5:7b-instruct]
+  medium: [qwen2.5:14b, qwen2.5:7b-instruct]
+  large:  [deepseek-r1:32b, qwen2.5:32b, llama3.3:70b]
+
+# ─── Tier escalation when a whole tier is unavailable ─────────────────────
+tier_fallback:
+  fast: medium
+  medium: large
+  large: null
+
 # ─── Tier semantics ──────────────────────────────────────────────────────
-# fast       — sub-second, low-quality. Use for classification, banlist, JSON
-# medium     — 1-5s, good quality. Default for most prompts
-# large      — 5-30s, high quality. Long-form output, complex reasoning
-# reasoning  — 30s+, strongest. Multi-step problems, code generation
+# fast    — sub-second, low quality. Classification, banlist, JSON, simple Q&A
+# medium  — 1-5s, good quality. Default for most prompts
+# large   — 5-30s, high quality. Long-form output, complex reasoning, code-gen

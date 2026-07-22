@@ -1,46 +1,91 @@
 # ─── Routing rules ────────────────────────────────────────────────────────
-# Maps task_type → model + tier + prompt_template + fallback chain.
-# The gateway picks the entry that best matches the caller's request.
+# Maps task_type → routing rule. Read by the router
+# (packages/gateway/src/pipeline/router.ts) via `routing_rules`. The
+# pre-classifier picks a task_type; the router looks it up here.
 #
-# Add your own task_types here. The pre-classifier will route into them
-# automatically based on the prompt content.
+# Each rule:
+#   model            primary model alias (must exist in models.yaml)
+#   tier             fast | medium | large  (selects timeout + fallback chain)
+#   prompt_template  template name under prompts/templates
+#   temperature      sampling temperature
+#   max_tokens       generation cap
+#   output_format    text | json
+#   requires_fact_check  run the fact-check validator path
+#   validators       list of validator names (defined in `validators` below)
+#   callers          'all' or specific caller ids allowed to use this task_type
 
-rules:
+routing_rules:
   # ─── Built-in: generic tasks ────────────────────────────────────────────
   pre_classify:
     model: qwen2.5:3b
     tier: fast
     prompt_template: pre_classifier
+    temperature: 0.1
+    max_tokens: 256
+    output_format: json
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Lightweight classifier called internally before routing"
 
   generic_qa:
     model: qwen2.5:14b
     tier: medium
     prompt_template: pre_classifier
+    temperature: 0.7
+    max_tokens: 2048
+    output_format: text
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Default for any conversational Q&A"
 
   generic_summarize:
     model: qwen2.5:14b
     tier: medium
     prompt_template: pre_classifier
+    temperature: 0.3
+    max_tokens: 512
+    output_format: text
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Summarize a longer text into 2-5 sentences"
 
   generic_extract:
     model: qwen2.5:14b
     tier: medium
     prompt_template: pre_classifier
+    temperature: 0.2
+    max_tokens: 1024
+    output_format: json
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Extract structured data from unstructured input"
 
   generic_classify:
     model: qwen2.5:3b
     tier: fast
     prompt_template: pre_classifier
+    temperature: 0.1
+    max_tokens: 256
+    output_format: json
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Single-label or multi-label classification"
 
   generic_rewrite:
     model: qwen2.5:14b
     tier: medium
     prompt_template: pre_classifier
+    temperature: 0.6
+    max_tokens: 1024
+    output_format: text
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Style transfer / tone adjustment / rephrase"
 
   # ─── Built-in: code tasks ───────────────────────────────────────────────
@@ -48,25 +93,63 @@ rules:
     model: qwen2.5-coder:7b-instruct
     tier: fast
     prompt_template: pre_classifier
+    temperature: 0.2
+    max_tokens: 1024
+    output_format: text
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Quick review pass on a code diff"
 
   code_generate:
     model: qwen2.5:32b
     tier: large
     prompt_template: pre_classifier
+    temperature: 0.4
+    max_tokens: 4096
+    output_format: text
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Generate new code from a spec"
+
+  # Alias for the request-scorer's `code_generation` tier (routeByScore maps it
+  # to gpt-4-turbo directly; this entry covers the static route() path).
+  code_generation:
+    model: qwen2.5:32b
+    tier: large
+    prompt_template: pre_classifier
+    temperature: 0.4
+    max_tokens: 4096
+    output_format: text
+    requires_fact_check: false
+    validators: []
+    callers: [all]
+    description: "Generate new code (static-router alias of code_generate)"
 
   # ─── Built-in: translation ──────────────────────────────────────────────
   content_translation_de_en:
     model: qwen2.5:14b
     tier: medium
     prompt_template: pre_classifier
+    temperature: 0.3
+    max_tokens: 2048
+    output_format: text
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Translate German → English preserving formatting"
 
   content_translation_en_de:
     model: qwen2.5:14b
     tier: medium
     prompt_template: pre_classifier
+    temperature: 0.3
+    max_tokens: 2048
+    output_format: text
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Translate English → German preserving formatting"
 
   # ─── Built-in: gateway internals ────────────────────────────────────────
@@ -74,18 +157,26 @@ rules:
     model: qwen2.5:3b
     tier: fast
     prompt_template: internal_ban_detect
+    temperature: 0.0
+    max_tokens: 256
+    output_format: json
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Banlist trigger detection on outputs"
 
   internal_prompt_improve:
     model: qwen2.5:14b
     tier: medium
     prompt_template: internal_prompt_improve
+    temperature: 0.5
+    max_tokens: 512
+    output_format: text
+    requires_fact_check: false
+    validators: []
+    callers: [all]
     description: "Self-improvement: suggest better prompt for a poor result"
 
-# ─── Default tier per fallback path ─────────────────────────────────────
-defaults:
-  fallback_chain:
-    fast:      [qwen2.5:3b, qwen2.5:7b-instruct]
-    medium:    [qwen2.5:14b, qwen2.5:7b-instruct]
-    large:     [qwen2.5:32b, qwen2.5:14b]
-    reasoning: [llama3.3:70b, qwen2.5:32b]
+# ─── Validator definitions ────────────────────────────────────────────────
+# Referenced by name from each rule's `validators` list. None defined yet.
+validators: {}
