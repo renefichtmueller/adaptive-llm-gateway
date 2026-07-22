@@ -94,11 +94,13 @@ export class LLMGatewayClient {
   private healthCheckCooldown = 0;
 
   constructor(config: {
-    baseUrl?: string;
-    ollamaUrl?: string;
+    // `| undefined` so callers may pass optional values through directly under
+    // exactOptionalPropertyTypes (e.g. createInteractiveClient's `baseUrl`).
+    baseUrl?: string | undefined;
+    ollamaUrl?: string | undefined;
     caller: string;
     /** Request timeout in ms (default: 30 000) */
-    timeout?: number;
+    timeout?: number | undefined;
   }) {
     this.baseUrl = config.baseUrl
       ?? process.env['LLM_GATEWAY_URL']
