@@ -50,7 +50,7 @@ jobs:
       - run: npm ci --workspaces --include-workspace-root
       - name: Run vitest (gateway)
         working-directory: packages/gateway
-        run: npm test || echo "No tests yet — soft pass"
+        run: npm test
 
   build-drift:
     name: Build-drift guard
