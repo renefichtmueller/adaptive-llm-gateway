@@ -1,7 +1,7 @@
-From 37b811f020c79133152ea3d3e2acf29dfd2955df Mon Sep 17 00:00:00 2001
+From a7c79717a0ea5c5ad217f7ae3d11f17ff1422520 Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 06:04:02 +0000
-Subject: [PATCH 05/10] fix(ios): record meetings through the lock screen and
+Subject: [PATCH 05/11] fix(ios): record meetings through the lock screen and
  stop losing audio
 
 Die Meeting-Aufnahme der iPhone-App starb bei Bildschirmsperre genauso wie

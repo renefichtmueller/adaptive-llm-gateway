@@ -1,7 +1,7 @@
-From 91ebb7212a34975fbf8a834fe974dd61397b418e Mon Sep 17 00:00:00 2001
+From cba1e17455d94e44dcb32c451c999682ec18511a Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 05:58:11 +0000
-Subject: [PATCH 02/10] feat(pwa): wake lock and honest interruption handling
+Subject: [PATCH 02/11] feat(pwa): wake lock and honest interruption handling
  for recordings
 
 Ein iPhone sperrte sich waehrend einer Meeting-Aufnahme nach dem normalen

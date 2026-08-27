@@ -1,5 +1,11 @@
 # VoiceHub: Fixes für den Sperr-Vorfall vom 25.08
 
+
+> **Update 27.08., 12:40 UTC:** Diese Serie ist inzwischen direkt in GitLab
+> gelandet: Branch `claude/voicehub-lock-resilience-2026-08-27`, **MR !25**
+> (companyos/voicehub), volle Testsuite `933 passed`, ruff grün. Dieses
+> Verzeichnis ist ab jetzt nur noch Spiegel/Archiv; Review und Merge bitte
+> im GitLab-MR.
 Git-Patch-Serie für `companyos/voicehub` (GitLab), erzeugt am 27.08.2026
 gegen `main @ d9774492` (Stand 23.08). Sie liegt hier im Gateway-Repo, weil
 der GitLab-Zugang der erzeugenden Session read-only war. Die Serie wurde
@@ -19,7 +25,7 @@ git am /pfad/zu/voicehub-fixes/patches/*.patch
 Falls `main` inzwischen weitergewandert ist und ein Patch nicht greift:
 `git am -3` nutzt die mitgelieferten Blob-Referenzen für einen 3-Wege-Merge.
 
-## Inhalt (10 Patches)
+## Inhalt (11 Patches)
 
 1. **fix(pwa)** `meeting-recorder.js`: `stop()` liefert auch bei einem von
    iOS still beendeten Recorder die gesammelten Chunks aus (der 25.08-

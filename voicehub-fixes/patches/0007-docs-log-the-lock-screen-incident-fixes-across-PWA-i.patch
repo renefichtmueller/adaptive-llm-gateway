@@ -1,7 +1,7 @@
-From 04e1304e28876e51727521fa4fd11b557da3deef Mon Sep 17 00:00:00 2001
+From 6f6b80ad5dbe276bddbc8972b83fb9239376f167 Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 06:08:09 +0000
-Subject: [PATCH 07/10] docs: log the lock-screen incident fixes across PWA,
+Subject: [PATCH 07/11] docs: log the lock-screen incident fixes across PWA,
  iOS and Pi
 
 ---

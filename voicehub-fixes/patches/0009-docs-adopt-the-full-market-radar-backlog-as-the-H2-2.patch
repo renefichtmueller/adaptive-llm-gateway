@@ -1,7 +1,7 @@
-From b51280e6060f69ee11f10a01f2affa87a4017835 Mon Sep 17 00:00:00 2001
+From 378806a5054c67a13016aa66ec04d939e0e66304 Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 09:52:29 +0000
-Subject: [PATCH 09/10] docs: adopt the full market-radar backlog as the
+Subject: [PATCH 09/11] docs: adopt the full market-radar backlog as the
  H2/2026 roadmap
 
 Beschluss vom 27.08: Alle 15 Marktradar-Punkte werden uebernommen bzw.

@@ -1,17 +1,42 @@
-From 0ba2a65b116141cccf880783a84dd0c915bf9276 Mon Sep 17 00:00:00 2001
+From e52d20867aaeaf53a739ea163ba00977166cec7b Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 06:01:22 +0000
-Subject: [PATCH 04/10] chore(pwa): bump shell to v26 and cache the chunk vault
+Subject: [PATCH 04/11] chore(pwa): bump shell to v26 and cache the chunk vault
 
 Versionierte URLs und Cache-Name folgen dem Muster vom 23.08., damit CDN
 und offene Tabs die neuen Dateien sicher ausliefern; chunk-vault.js wird
 Teil der Shell (Offline-Cache + Update-Pfad).
 ---
- web/public/index.html |  2 +-
- web/public/js/app.js  | 10 +++++-----
- web/public/sw.js      |  3 ++-
- 3 files changed, 8 insertions(+), 7 deletions(-)
+ tests/test_voiceprint_lifecycle.py         |  2 +-
+ tests/test_web_meeting_capture_contract.py |  2 +-
+ web/public/index.html                      |  2 +-
+ web/public/js/app.js                       | 10 +++++-----
+ web/public/sw.js                           |  3 ++-
+ 5 files changed, 10 insertions(+), 9 deletions(-)
 
+diff --git a/tests/test_voiceprint_lifecycle.py b/tests/test_voiceprint_lifecycle.py
+index c1f40da..5432d10 100644
+--- a/tests/test_voiceprint_lifecycle.py
++++ b/tests/test_voiceprint_lifecycle.py
+@@ -479,4 +479,4 @@ def test_pwa_exposes_responsive_metadata_only_voiceprint_lifecycle() -> None:
+     assert "Widerrufen – DGX-Löschung ausstehend" in app
+     assert "Löschung verifiziert" in app
+     assert "provider_reference" not in app
+-    assert "voicehub-shell-v25" in service_worker
++    assert "voicehub-shell-v26" in service_worker
+diff --git a/tests/test_web_meeting_capture_contract.py b/tests/test_web_meeting_capture_contract.py
+index 3348ac1..d88829f 100644
+--- a/tests/test_web_meeting_capture_contract.py
++++ b/tests/test_web_meeting_capture_contract.py
+@@ -116,7 +116,7 @@ def test_confirmed_speaker_names_replace_only_line_prefixes() -> None:
+ 
+ 
+ def test_service_worker_caches_meeting_recorder_with_new_shell_version() -> None:
+-    assert "voicehub-shell-v25" in SERVICE_WORKER
++    assert "voicehub-shell-v26" in SERVICE_WORKER
+     assert "'/js/meeting-recorder.js'" in SERVICE_WORKER
+ 
+ 
 diff --git a/web/public/index.html b/web/public/index.html
 index bb4821d..5bc8e0d 100644
 --- a/web/public/index.html

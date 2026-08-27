@@ -1,7 +1,7 @@
-From 8cca3da0b0398f23d1bdfac443a840d6cd64f6f5 Mon Sep 17 00:00:00 2001
+From 133aeb2cf9f6bcc3cc181178b2d29b028a2cdbf9 Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 10:23:49 +0000
-Subject: [PATCH 10/10] docs: implementation-ready specs for the six R1 slices
+Subject: [PATCH 10/11] docs: implementation-ready specs for the six R1 slices
 
 Jeder R1-Slice aus docs/roadmap-2026-h2.md als ausfuehrbare Spezifikation:
 Scope, API-Vertrag, UX-Akzeptanz und Schliessbeweis -- Vorlagen-Karten

@@ -1,0 +1,37 @@
+From f69a51f20142417c150fcc27ac7d532b3a9f567f Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Thu, 27 Aug 2026 10:34:17 +0000
+Subject: [PATCH 11/11] chore(tests): annotate mutable class attribute for
+ newer ruff
+
+RUF012 schlaegt mit aktuellem ruff (>=0.7 unpinned) auf main an; die
+ClassVar-Annotation macht die Absicht explizit, Verhalten unveraendert.
+---
+ tests/test_release_gate_probe.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/tests/test_release_gate_probe.py b/tests/test_release_gate_probe.py
+index 77eb736..0b3fec4 100644
+--- a/tests/test_release_gate_probe.py
++++ b/tests/test_release_gate_probe.py
+@@ -2,7 +2,7 @@ from __future__ import annotations
+ 
+ import json
+ from dataclasses import asdict, replace
+-from typing import cast
++from typing import ClassVar, cast
+ 
+ from voicehub.monitoring.revocation import RevocationMonitorStatus
+ from voicehub.ops.asr_contract_probe import ASRContractProbeResult
+@@ -248,7 +248,7 @@ class _FakeResponse:
+ class _FakeClient:
+     """Minimal httpx.Client stand-in that records the cookie it was given."""
+ 
+-    captured: dict = {}
++    captured: ClassVar[dict] = {}
+ 
+     def __init__(self, status_code: int) -> None:
+         self._status_code = status_code
+-- 
+2.43.0
+
