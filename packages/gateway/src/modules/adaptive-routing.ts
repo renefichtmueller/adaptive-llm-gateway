@@ -169,7 +169,7 @@ export async function runAdaptiveLearner(db: PgClient): Promise<{ updated: numbe
   if (!ENABLED) return { updated: 0 };
   const t0 = Date.now();
 
-  let rows: Record<string, unknown>[] = [];
+  let rows: Record<string, unknown>[];
   try {
     const result = await db.query(
       `

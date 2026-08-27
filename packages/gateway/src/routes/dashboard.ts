@@ -77,14 +77,6 @@ interface AgentActivity {
   lastActivity: string;
 }
 
-interface LearningMetrics {
-  promptsImproved: number;
-  routingUpdates: number;
-  templateVariations: number;
-  averageScoreGain: number;
-  lastLearningRun: string;
-}
-
 interface AlertData {
   active: number;
   byType: Record<string, number>;
@@ -933,7 +925,7 @@ export async function dashboardRoute(fastify: FastifyInstance): Promise<void> {
 
       // Categorize all providers (independent of API-key presence)
       const providers = await Promise.all(allProviders.map(async provider => {
-        let type: 'local' | 'subscription' | 'free' = 'free';
+        let type: 'local' | 'subscription' | 'free';
         if (provider.name.toLowerCase().includes('ollama')) {
           type = 'local';
         } else if (subscriptionNames.has(provider.name)) {

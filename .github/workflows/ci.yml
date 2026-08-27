@@ -43,8 +43,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci --workspaces --include-workspace-root
-      - name: ESLint (warnings allowed)
-        run: npx eslint 'packages/*/src/**/*.ts' --max-warnings 50 || true
+      - name: ESLint
+        run: npx eslint 'packages/*/src/**/*.ts' --max-warnings 50
 
   test:
     name: Test

@@ -140,7 +140,7 @@ function loadModels(): ModelsYaml {
     return modelsConfig;
   } catch (err) {
     logger.error({ err }, 'Failed to load models.yaml');
-    throw new Error('Could not load models configuration');
+    throw new Error('Could not load models configuration', { cause: err });
   }
 }
 
@@ -152,7 +152,7 @@ function loadRoutingRules(): RoutingRulesYaml {
     return routingConfig;
   } catch (err) {
     logger.error({ err }, 'Failed to load routing-rules.yaml');
-    throw new Error('Could not load routing rules configuration');
+    throw new Error('Could not load routing rules configuration', { cause: err });
   }
 }
 

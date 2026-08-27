@@ -71,6 +71,7 @@ export function estimateTokens(text: string): number {
 }
 
 function stripAnsi(input: string): { text: string; changed: boolean } {
+  // eslint-disable-next-line no-control-regex -- stripping ANSI escapes requires matching \x1b
   const text = input.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
   return { text, changed: text !== input };
 }
@@ -120,7 +121,7 @@ function classifyLine(line: string): LineKind {
   if (/^(?:\+{3}|-{3}|@@|\+|-)(?!\d)/.test(trimmed)) return 'diff';
   if (/\b(error|failed|failure|exception|traceback|panic|fatal|denied|unauthorized)\b/i.test(trimmed)) return 'error';
   if (/^\s*(?:at\s+[\w.$/<>-]+|\w+Error:|Traceback \(most recent call last\))/.test(line)) return 'stacktrace';
-  if (/^[{\[]/.test(trimmed) || /[:,]\s*["\d{[]/.test(trimmed)) return 'json';
+  if (/^[{[]/.test(trimmed) || /[:,]\s*["\d{[]/.test(trimmed)) return 'json';
   if (/^\|.+\|$/.test(trimmed) || /\S\s{2,}\S\s{2,}\S/.test(trimmed)) return 'table';
   if (/^(?:import|export\s+.*from|from\s+\S+\s+import|require\(|use\s+|#include|package\s+|mod\s+)/.test(trimmed)) return 'import';
   if (/^(?:export\s+)?(?:async\s+)?(?:function|class|interface|type|const|let|var)\s+[A-Za-z_$][\w$]|\b(?:pub\s+)?(?:async\s+)?fn\s+\w+|^(?:def|class)\s+\w+|^func\s+\w+/.test(trimmed)) return 'signature';

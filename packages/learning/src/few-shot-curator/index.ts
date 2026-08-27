@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, resolve } from 'path';
 import yaml from 'js-yaml';
-import { query, withTransaction } from '../db/client.js';
+import { query } from '../db/client.js';
 import { logger } from '../observability/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────

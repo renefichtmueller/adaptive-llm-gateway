@@ -57,7 +57,7 @@ export async function initPgBoss(): Promise<void> {
     retryBackoff: true,
   });
 
-  await (boss as unknown as { work: Function }).work(
+  await (boss as unknown as { work: (name: string, options: { concurrency: number }, handler: typeof processJob) => Promise<string> }).work(
     QUEUE_NAME,
     { concurrency: CONCURRENCY },
     processJob,

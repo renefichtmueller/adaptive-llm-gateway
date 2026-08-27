@@ -1,6 +1,5 @@
 import { getPool } from '../db/client.js';
 import { logger } from '../observability/logger.js';
-import { getFallbackChainStats } from '../observability/fallback-tracker.js';
 
 export interface ImprovementInsight {
   type: 'model_underperforming' | 'fallback_overused' | 'slow_model' | 'confidence_drift';
@@ -117,7 +116,7 @@ async function detectImprovements(
   return insights;
 }
 
-async function analyzeAndImprove(pool: any, duration: string): Promise<number> {
+async function analyzeAndImprove(pool: any, _duration: string): Promise<number> {
   let changes = 0;
 
   // 1. Update model_performance aggregates.

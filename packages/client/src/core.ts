@@ -181,7 +181,7 @@ export class LLMGatewayClient {
           await new Promise(resolve => setTimeout(resolve, backoffMs));
         } else {
           console.error('[Ollama] All retry attempts exhausted', err);
-          throw new Error('Both Gateway and Ollama unavailable');
+          throw new Error('Both Gateway and Ollama unavailable', { cause: err });
         }
       }
     }

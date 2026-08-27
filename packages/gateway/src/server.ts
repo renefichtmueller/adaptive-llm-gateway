@@ -34,7 +34,6 @@ import { dirname, join } from 'path';
 import { readFileSync, existsSync } from 'fs';
 import {
   getTLSConfig,
-  loadTLSCertificates,
   validateTLSConfig,
   validateDatabaseSSL,
   registerHSTSMiddleware,
