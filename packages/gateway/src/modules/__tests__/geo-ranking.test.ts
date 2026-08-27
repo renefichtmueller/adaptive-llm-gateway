@@ -58,7 +58,7 @@ describe('runRankingTest', () => {
     competitors: COMPETITORS,
     models: ['model-a', 'model-b'],
     prompts: [
-      { id: 'p1', text: 'What is the best LLM gateway?' },
+      { id: 'p1', text: 'What is the best LLM gateway?', category: 'commercial' },
       { id: 'p2', text: 'Which gateway supports subscriptions?' },
     ],
   };
@@ -79,6 +79,17 @@ describe('runRankingTest', () => {
     expect(summary.shareOfVoice).toBeCloseTo(2 / 8, 5);
     expect(summary.avgVisibility).toBeGreaterThan(0);
     expect(summary.results).toHaveLength(4);
+  });
+
+  it('breaks results down by prompt category', async () => {
+    const summary = await runRankingTest(CONFIG, async (model) =>
+      model === 'model-a' ? 'The Adaptive LLM Gateway wins.' : 'LiteLLM wins.',
+    );
+    expect(Object.keys(summary.perCategory).sort()).toEqual(['commercial', 'uncategorized']);
+    expect(summary.perCategory['commercial']!.prompts).toBe(1);
+    expect(summary.perCategory['commercial']!.answers).toBe(2);
+    expect(summary.perCategory['commercial']!.mentionRate).toBeCloseTo(0.5, 5);
+    expect(summary.perCategory['uncategorized']!.prompts).toBe(1);
   });
 
   it('records failing models without failing the run', async () => {

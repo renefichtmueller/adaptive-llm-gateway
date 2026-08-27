@@ -196,6 +196,8 @@ export interface GeoRankingResultRow {
   model: string;
   promptId: string;
   promptText: string;
+  /** Prompt category from the targets config (e.g. commercial, faq, comparison). */
+  category?: string;
   answered: boolean;
   error?: string;
   answerExcerpt: string;
@@ -207,6 +209,13 @@ export interface GeoRankingModelSummary {
   mentionRate: number;
   citationRate: number;
   shareOfVoice: number;
+  avgVisibility: number;
+}
+
+export interface GeoRankingCategorySummary {
+  prompts: number;
+  answers: number;
+  mentionRate: number;
   avgVisibility: number;
 }
 
@@ -223,6 +232,8 @@ export interface GeoRankingRunSummary {
   avgFirstMentionPos: number | null;
   sentimentBreakdown: { positive: number; neutral: number; negative: number };
   perModel: Record<string, GeoRankingModelSummary>;
+  /** Breakdown by prompt category — shows where visibility is won or lost. */
+  perCategory: Record<string, GeoRankingCategorySummary>;
   results: GeoRankingResultRow[];
   startedAt: string;
   finishedAt: string;
@@ -291,6 +302,7 @@ export async function runRankingTest(
           model,
           promptId: prompt.id,
           promptText: prompt.text,
+          category: prompt.category,
           answered: true,
           answerExcerpt: answer.slice(0, 1_000),
           evaluation: evaluateAnswer(answer, config.brand, config.competitors),
@@ -298,7 +310,7 @@ export async function runRankingTest(
       } else {
         const error = outcome.status === 'rejected' ? String(outcome.reason instanceof Error ? outcome.reason.message : outcome.reason) : 'empty answer';
         logger.warn({ model, promptId: prompt.id, error }, 'geo-ranking: prompt failed for model');
-        rows.push({ model, promptId: prompt.id, promptText: prompt.text, answered: false, error, answerExcerpt: '', evaluation: null });
+        rows.push({ model, promptId: prompt.id, promptText: prompt.text, category: prompt.category, answered: false, error, answerExcerpt: '', evaluation: null });
       }
     });
   }
@@ -321,6 +333,19 @@ export async function runRankingTest(
     };
   }
 
+  const perCategory: Record<string, GeoRankingCategorySummary> = {};
+  const categories = [...new Set(prompts.map((p) => p.category ?? 'uncategorized'))];
+  for (const category of categories) {
+    const categoryRows = rows.filter((r) => (r.category ?? 'uncategorized') === category);
+    const categorySummary = summarize(categoryRows);
+    perCategory[category] = {
+      prompts: prompts.filter((p) => (p.category ?? 'uncategorized') === category).length,
+      answers: categoryRows.filter((r) => r.answered).length,
+      mentionRate: categorySummary.mentionRate,
+      avgVisibility: categorySummary.avgVisibility,
+    };
+  }
+
   const finishedAt = new Date();
   return {
     brand: config.brand.name,
@@ -331,6 +356,7 @@ export async function runRankingTest(
     ...overall,
     sentimentBreakdown,
     perModel,
+    perCategory,
     results: rows,
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
@@ -365,7 +391,7 @@ export async function persistRankingRun(
         summary.citationRate,
         summary.shareOfVoice,
         summary.avgVisibility,
-        JSON.stringify({ perModel: summary.perModel, sentimentBreakdown: summary.sentimentBreakdown, avgFirstMentionPos: summary.avgFirstMentionPos, errorCount: summary.errorCount, durationMs: summary.durationMs }),
+        JSON.stringify({ perModel: summary.perModel, perCategory: summary.perCategory, sentimentBreakdown: summary.sentimentBreakdown, avgFirstMentionPos: summary.avgFirstMentionPos, errorCount: summary.errorCount, durationMs: summary.durationMs }),
         summary.startedAt,
         summary.finishedAt,
       ],
@@ -376,15 +402,16 @@ export async function persistRankingRun(
     for (const row of summary.results) {
       await db.query(
         `INSERT INTO geo_ranking_results
-           (run_id, model, prompt_id, prompt_text, answered, brand_mentioned, mention_count,
+           (run_id, model, prompt_id, prompt_text, prompt_category, answered, brand_mentioned, mention_count,
             first_mention_pos, domain_cited, brand_rank, competitor_mentions, sentiment,
             visibility_score, answer_excerpt)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
         [
           runId,
           row.model,
           row.promptId,
           row.promptText,
+          row.category ?? null,
           row.answered,
           row.evaluation?.brandMentioned ?? false,
           row.evaluation?.mentionCount ?? 0,

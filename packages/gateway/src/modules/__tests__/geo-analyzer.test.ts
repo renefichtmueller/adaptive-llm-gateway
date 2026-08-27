@@ -3,9 +3,11 @@ import {
   analyzeGeo,
   extractContent,
   checkAiCrawlerAccess,
+  evaluateLlmsTxt,
   detectLanguage,
   __INTERNALS,
 } from '../geo-analyzer.js';
+import { GEO_TECHNIQUES, GEO_DISCIPLINES } from '../geo-knowledge.js';
 
 const OPTIMIZED_DE = `# Was ist ein LLM-Gateway?
 
@@ -93,6 +95,59 @@ describe('analyzeGeo', () => {
     const analysis = analyzeGeo({ content: POOR_CONTENT, format: 'text' });
     expect(analysis.recommendations.length).toBeGreaterThan(2);
     expect(analysis.grade).toMatch(/[DEF]/);
+  });
+
+  it('reports per-discipline score lenses (AEO / GEO / LLMO)', () => {
+    const analysis = analyzeGeo({ content: OPTIMIZED_DE, format: 'markdown', brand: 'Adaptive LLM Gateway' });
+    expect(analysis.disciplineScores.aeo).toBeGreaterThanOrEqual(0);
+    expect(analysis.disciplineScores.aeo).toBeLessThanOrEqual(100);
+    expect(analysis.disciplineScores.geo).toBeGreaterThanOrEqual(60);
+    expect(analysis.disciplineScores.llmo).toBeGreaterThanOrEqual(0);
+    // Every factor carries at least one discipline tag.
+    for (const factor of analysis.factors) {
+      expect(factor.disciplines.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('geo-knowledge discipline catalogue', () => {
+  it('describes the full family and tags every technique', () => {
+    expect(GEO_DISCIPLINES.map((d) => d.id).sort()).toEqual(['aeo', 'geo', 'llmo', 'seo']);
+    for (const technique of GEO_TECHNIQUES) {
+      expect(technique.disciplines.length).toBeGreaterThan(0);
+    }
+    // Each non-SEO discipline has at least one dedicated technique.
+    for (const id of ['aeo', 'geo', 'llmo'] as const) {
+      expect(GEO_TECHNIQUES.some((t) => t.disciplines.includes(id))).toBe(true);
+    }
+  });
+});
+
+describe('evaluateLlmsTxt', () => {
+  it('accepts a well-formed llms.txt', () => {
+    const report = evaluateLlmsTxt(
+      '# Example GmbH\n\n> Kurzüberblick über die wichtigsten Seiten.\n\n## Produkte\n\n- [Transceiver](https://example.com/produkte): Übersicht\n- [Kompatibilität](https://example.com/kompatibel): Matrix\n',
+    );
+    expect(report.present).toBe(true);
+    expect(report.valid).toBe(true);
+    expect(report.hasTitle).toBe(true);
+    expect(report.hasSummary).toBe(true);
+    expect(report.sectionCount).toBe(1);
+    expect(report.linkCount).toBe(2);
+  });
+
+  it('reports absence with a how-to recommendation', () => {
+    const report = evaluateLlmsTxt(null);
+    expect(report.present).toBe(false);
+    expect(report.valid).toBe(false);
+    expect(report.recommendations.join(' ')).toContain('llmstxt.org');
+  });
+
+  it('flags a malformed file (no title, no links)', () => {
+    const report = evaluateLlmsTxt('Just some prose without any structure at all.');
+    expect(report.present).toBe(true);
+    expect(report.valid).toBe(false);
+    expect(report.recommendations.join(' ')).toContain('H1 title');
   });
 });
 

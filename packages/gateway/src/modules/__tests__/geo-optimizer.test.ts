@@ -86,8 +86,9 @@ describe('optimizeContentForGeo', () => {
       {
         geoScore: 30,
         grade: 'E',
+        disciplineScores: { aeo: 25, geo: 30, llmo: 40 },
         factors: [
-          { id: 'statistics', label: 'Statistics & data points', score: 10, weight: 14, applicable: true, evidence: [], recommendations: ['Add concrete statistics.'] },
+          { id: 'statistics', label: 'Statistics & data points', score: 10, weight: 14, applicable: true, disciplines: ['geo'], evidence: [], recommendations: ['Add concrete statistics.'] },
         ],
         recommendations: [],
         stats: { format: 'text', language: 'de', words: 50, sentences: 2, paragraphs: 1, headings: 0, links: 0, listItems: 0, tables: 0, statisticsFound: 0, quotationsFound: 0, schemaTypes: [] },

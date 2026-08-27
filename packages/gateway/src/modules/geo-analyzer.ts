@@ -1,19 +1,22 @@
 /**
- * GEO Analyzer — deterministic content scoring for Generative Engine Optimization
- * -------------------------------------------------------------------------------
- * Scores a piece of content (HTML, Markdown or plain text) against the GEO
- * factors distilled in geo-knowledge.ts: statistics, citations, quotations,
+ * GEO/AEO Analyzer — deterministic content scoring for the AI-visibility family
+ * -----------------------------------------------------------------------------
+ * Scores a piece of content (HTML, Markdown or plain text) against the factors
+ * distilled in geo-knowledge.ts: statistics, citations, quotations,
  * extractable structure, answer-first style, fluency, entity clarity, E-E-A-T
- * signals, schema.org markup and keyword hygiene. Pure + synchronous — no LLM,
- * no network, no DB — so it can run on every save and inside unit tests.
+ * signals, schema.org markup and keyword hygiene. Every factor is tagged with
+ * the disciplines it serves (AEO / GEO / LLMO), and the analysis reports a
+ * per-discipline score lens next to the overall score. Pure + synchronous —
+ * no LLM, no network, no DB — so it can run on every save and in unit tests.
  *
  * Heuristics are bilingual (EN + DE), matching the gateway's injection-defense
  * conventions. Also includes an AI-crawler robots.txt audit
- * (checkAiCrawlerAccess), because a blocked search bot means zero visibility
- * in that engine no matter how good the content is.
+ * (checkAiCrawlerAccess) — a blocked search bot means zero visibility in that
+ * engine no matter how good the content is — and an llms.txt evaluation
+ * (evaluateLlmsTxt) for the emerging content-discovery convention.
  */
 
-import { AI_CRAWLERS, type AiCrawler } from './geo-knowledge.js';
+import { AI_CRAWLERS, type AiCrawler, type AiVisibilityDiscipline } from './geo-knowledge.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -37,11 +40,16 @@ export interface GeoFactorResult {
   /** Relative weight in the total score (0 when not applicable). */
   weight: number;
   applicable: boolean;
+  /** Which disciplines of the family this factor serves (AEO/GEO/LLMO). */
+  disciplines: AiVisibilityDiscipline[];
   evidence: string[];
   recommendations: string[];
   /** Raw count behind the score where one exists (e.g. data points found). */
   metric?: number;
 }
+
+/** Factor as produced by the per-factor analyzers; discipline tags are attached centrally. */
+type RawFactorResult = Omit<GeoFactorResult, 'disciplines'>;
 
 export interface GeoQueryCoverage {
   query: string;
@@ -69,6 +77,12 @@ export interface GeoAnalysis {
   /** Weighted total 0–100. */
   geoScore: number;
   grade: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+  /**
+   * The same factors viewed through each discipline's lens: weighted score
+   * over the applicable factors tagged with that discipline. LLMO is mostly
+   * off-page, so its content-side lens covers entity/E-E-A-T/hygiene only.
+   */
+  disciplineScores: Record<'aeo' | 'geo' | 'llmo', number>;
   factors: GeoFactorResult[];
   /** Top recommendations across factors, worst factors first. */
   recommendations: string[];
@@ -105,6 +119,21 @@ const FACTOR_WEIGHTS: Record<string, number> = {
   eeat_freshness: 9,
   schema_markup: 5,
   keyword_hygiene: 4,
+};
+
+// Which disciplines each factor serves — the per-discipline score lenses are
+// the weighted average over the applicable factors tagged with the discipline.
+const FACTOR_DISCIPLINES: Record<string, AiVisibilityDiscipline[]> = {
+  citations: ['geo'],
+  statistics: ['geo'],
+  structure: ['geo', 'aeo'],
+  direct_answers: ['aeo', 'geo'],
+  quotations: ['geo'],
+  fluency_readability: ['geo', 'aeo'],
+  entity_clarity: ['llmo', 'geo'],
+  eeat_freshness: ['geo', 'llmo'],
+  schema_markup: ['aeo'],
+  keyword_hygiene: ['geo', 'aeo', 'llmo'],
 };
 
 // ─── Language + tokenization helpers ───────────────────────────────────────
@@ -295,7 +324,7 @@ const STAT_PATTERNS: RegExp[] = [
   /\b(?:über|unter|rund|etwa|ca\.|more than|less than|about|approx\.?)\s\d+/gi, // approximations
 ];
 
-function analyzeStatistics(doc: ExtractedDoc): GeoFactorResult {
+function analyzeStatistics(doc: ExtractedDoc): RawFactorResult {
   const found: string[] = [];
   for (const pattern of STAT_PATTERNS) {
     for (const m of doc.text.matchAll(pattern)) {
@@ -327,7 +356,7 @@ function analyzeStatistics(doc: ExtractedDoc): GeoFactorResult {
 const CITATION_PHRASES = /\b(laut|gemäß|zufolge|according to|sources?:|quellen?:|studie (?:von|der|des)|study (?:by|from)|research (?:by|from)|report (?:by|from)|belegt durch|zeigt eine studie)\b/gi;
 const AUTHORITY_DOMAINS = /\b(?:[a-z0-9-]+\.)*(wikipedia\.org|arxiv\.org|doi\.org|nature\.com|sciencedirect\.com|ieee\.org|iso\.org|statista\.com|acm\.org|nist\.gov|europa\.eu|[a-z0-9-]+\.gov|[a-z0-9-]+\.edu)\b/gi;
 
-function analyzeCitations(doc: ExtractedDoc): GeoFactorResult {
+function analyzeCitations(doc: ExtractedDoc): RawFactorResult {
   const externalLinks = doc.links.filter((l) => /^https?:\/\//i.test(l.url));
   const phrases = [...doc.text.matchAll(CITATION_PHRASES)];
   const authority = [...new Set([...doc.text.matchAll(AUTHORITY_DOMAINS), ...externalLinks.flatMap((l) => [...l.url.matchAll(AUTHORITY_DOMAINS)])].map((m) => m[1] ?? m[0]))];
@@ -354,7 +383,7 @@ function analyzeCitations(doc: ExtractedDoc): GeoFactorResult {
 const QUOTE_PATTERN = /[„“"«]([^„“”"«»]{15,400}?)[”"“»]/g;
 const ATTRIBUTION_NEARBY = /(sagt|sagte|erklärt|betont|meint|so\s+[A-ZÄÖÜ]|says|said|explains|notes|laut|according to|—|–)/;
 
-function analyzeQuotations(doc: ExtractedDoc): GeoFactorResult {
+function analyzeQuotations(doc: ExtractedDoc): RawFactorResult {
   const evidence: string[] = [];
   let attributed = 0;
   let total = 0;
@@ -385,7 +414,7 @@ function analyzeQuotations(doc: ExtractedDoc): GeoFactorResult {
   return { id: 'quotations', label: 'Expert quotations', score, weight: FACTOR_WEIGHTS['quotations'] ?? 0, applicable: true, evidence, recommendations, metric: total };
 }
 
-function analyzeStructure(doc: ExtractedDoc): GeoFactorResult {
+function analyzeStructure(doc: ExtractedDoc): RawFactorResult {
   const wordCount = Math.max(1, words(doc.text).length);
   const evidence: string[] = [];
   const recommendations: string[] = [];
@@ -418,18 +447,23 @@ function analyzeStructure(doc: ExtractedDoc): GeoFactorResult {
 
 const QUESTION_START = /^(was|wie|warum|wieso|weshalb|welche[rs]?|wann|wo|womit|wofür|what|how|why|which|when|where|who|is|are|can|does|do|should|ist|sind|kann|sollte)\b/i;
 
-function analyzeDirectAnswers(doc: ExtractedDoc): GeoFactorResult {
+function analyzeDirectAnswers(doc: ExtractedDoc): RawFactorResult {
   const evidence: string[] = [];
   const recommendations: string[] = [];
 
   const questionHeadings = doc.headings.filter((h) => h.text.endsWith('?') || QUESTION_START.test(h.text));
-  // Does a question heading get a concise answer right below it?
+  // Does a question heading get a concise answer right below it? AEO sweet
+  // spot for a liftable snippet/voice answer is ~40-60 words; up to 65 counts.
   let answeredDirectly = 0;
+  let snippetReady = 0;
   for (const qh of questionHeadings) {
     const headingPos = doc.text.indexOf(qh.text.replace(/\?$/, ''));
     if (headingPos < 0) continue;
     const following = doc.paragraphs.find((p) => doc.text.indexOf(p) > headingPos);
-    if (following && words(following).length <= 65) answeredDirectly++;
+    if (!following) continue;
+    const followingWords = words(following).length;
+    if (followingWords <= 65) answeredDirectly++;
+    if (followingWords >= 25 && followingWords <= 65) snippetReady++;
   }
 
   const firstParagraph = doc.paragraphs[0] ?? '';
@@ -442,22 +476,23 @@ function analyzeDirectAnswers(doc: ExtractedDoc): GeoFactorResult {
   if (answerFirstOpening) score += 15;
   score = clamp(score);
 
-  if (questionHeadings.length > 0) evidence.push(`${questionHeadings.length} question-style heading(s), ${answeredDirectly} answered concisely below`);
+  if (questionHeadings.length > 0) evidence.push(`${questionHeadings.length} question-style heading(s), ${answeredDirectly} answered concisely below (${snippetReady} in the 40–60-word snippet format)`);
   if (doc.faqDetected) evidence.push('FAQ section detected');
   if (answerFirstOpening) evidence.push('opening paragraph is short (answer-first)');
 
   if (questionHeadings.length === 0) recommendations.push('Phrase key headings as the questions users actually ask ("Was ist …?", "How does …?") and answer them in the first sentence below.');
+  if (questionHeadings.length > 0 && snippetReady < questionHeadings.length) recommendations.push('Format the paragraph under each question heading as a self-contained 40–60-word answer block — the format featured snippets, People Also Ask and voice assistants lift verbatim (AEO).');
   if (!doc.faqDetected) recommendations.push('Add an FAQ section for long-tail questions (ideally with FAQPage schema).');
   if (!answerFirstOpening) recommendations.push('Open with the direct answer in 2–3 sentences; put background and details after it.');
 
-  return { id: 'direct_answers', label: 'Direct answers & FAQ', score, weight: FACTOR_WEIGHTS['direct_answers'] ?? 0, applicable: true, evidence, recommendations };
+  return { id: 'direct_answers', label: 'Direct answers & FAQ', score, weight: FACTOR_WEIGHTS['direct_answers'] ?? 0, applicable: true, evidence, recommendations, metric: snippetReady };
 }
 
 const PASSIVE_EN = /\b(?:is|are|was|were|been|being)\s+\w+(?:ed|en)\b/gi;
 const PASSIVE_DE = /\b(?:wird|werden|wurde|wurden|worden)\s+(?:\w+\s+){0,3}?(?:ge\w+t|ge\w+en|\w+iert)\b/gi;
 const FLUFF_WORDS = /\b(revolution(?:ary|är)|world[- ]?class|weltklasse|cutting[- ]?edge|best[- ]?in[- ]?class|einzigartig|unvergleichlich|game[- ]?chang(?:er|ing)|bahnbrechend|next[- ]?level|synerg\w+)\b/gi;
 
-function analyzeFluency(doc: ExtractedDoc): GeoFactorResult {
+function analyzeFluency(doc: ExtractedDoc): RawFactorResult {
   const sentences = splitSentences(doc.text);
   const evidence: string[] = [];
   const recommendations: string[] = [];
@@ -490,7 +525,7 @@ function analyzeFluency(doc: ExtractedDoc): GeoFactorResult {
   return { id: 'fluency_readability', label: 'Fluency & readability', score, weight: FACTOR_WEIGHTS['fluency_readability'] ?? 0, applicable: true, evidence, recommendations };
 }
 
-function analyzeEntityClarity(doc: ExtractedDoc, brand?: string, aliases: string[] = []): GeoFactorResult {
+function analyzeEntityClarity(doc: ExtractedDoc, brand?: string, aliases: string[] = []): RawFactorResult {
   if (!brand || brand.trim().length === 0) {
     return {
       id: 'entity_clarity', label: 'Brand entity clarity', score: 0, weight: 0, applicable: false,
@@ -531,7 +566,7 @@ const AUTHOR_MARKERS = /\b(autor(?:in)?|verfasst von|geschrieben von|author|writ
 const CREDENTIAL_MARKERS = /\b(Dr\.|Prof\.|Dipl\.|M\.?Sc\.?|B\.?Sc\.?|PhD|MBA|zertifiziert|certified|\d+\s?(?:jahren?|years?)\s(?:erfahrung|of experience))\b/gi;
 const EXPERIENCE_MARKERS = /\b(wir haben getestet|in unserem test|selbst gemessen|aus unserer praxis|unsere messungen|we tested|in our test(?:s|ing)?|hands-on|we measured|our benchmark|first-hand)\b/gi;
 
-function analyzeEeatFreshness(doc: ExtractedDoc): GeoFactorResult {
+function analyzeEeatFreshness(doc: ExtractedDoc): RawFactorResult {
   const dates = doc.text.match(DATE_PATTERNS) ?? [];
   const updated = doc.text.match(UPDATED_MARKERS) ?? [];
   const authors = doc.text.match(AUTHOR_MARKERS) ?? [];
@@ -562,11 +597,11 @@ function analyzeEeatFreshness(doc: ExtractedDoc): GeoFactorResult {
 }
 
 const VALUABLE_SCHEMA_TYPES = new Set([
-  'Article', 'NewsArticle', 'BlogPosting', 'TechArticle', 'FAQPage', 'HowTo', 'Product',
-  'Organization', 'LocalBusiness', 'Person', 'WebSite', 'BreadcrumbList', 'Review', 'SoftwareApplication',
+  'Article', 'NewsArticle', 'BlogPosting', 'TechArticle', 'FAQPage', 'QAPage', 'Speakable', 'HowTo',
+  'Product', 'Organization', 'LocalBusiness', 'Person', 'WebSite', 'BreadcrumbList', 'Review', 'SoftwareApplication',
 ]);
 
-function analyzeSchemaMarkup(doc: ExtractedDoc): GeoFactorResult {
+function analyzeSchemaMarkup(doc: ExtractedDoc): RawFactorResult {
   if (doc.format !== 'html') {
     return {
       id: 'schema_markup', label: 'Structured data (schema.org)', score: 0, weight: 0, applicable: false,
@@ -582,13 +617,13 @@ function analyzeSchemaMarkup(doc: ExtractedDoc): GeoFactorResult {
 
   const evidence = doc.schemaTypes.length > 0 ? [`JSON-LD types: ${doc.schemaTypes.join(', ')}`] : ['no JSON-LD structured data found'];
   const recommendations: string[] = [];
-  if (score < 70) recommendations.push('Add JSON-LD structured data (Article/TechArticle + Organization; FAQPage for FAQ sections) to disambiguate the entity and content type.');
-  else if (!doc.schemaTypes.includes('FAQPage') && doc.faqDetected) recommendations.push('The FAQ section lacks FAQPage schema — add it.');
+  if (score < 70) recommendations.push('Add JSON-LD structured data (Article/TechArticle + Organization; FAQPage/QAPage for Q&A sections, Speakable for voice) to disambiguate the entity and content type.');
+  else if (!doc.schemaTypes.includes('FAQPage') && doc.faqDetected) recommendations.push('The FAQ section lacks FAQPage schema — add it (QAPage/Speakable where they fit).');
 
   return { id: 'schema_markup', label: 'Structured data (schema.org)', score, weight: FACTOR_WEIGHTS['schema_markup'] ?? 0, applicable: true, evidence, recommendations };
 }
 
-function analyzeKeywordHygiene(doc: ExtractedDoc): GeoFactorResult {
+function analyzeKeywordHygiene(doc: ExtractedDoc): RawFactorResult {
   const tokens = words(doc.text.toLowerCase())
     .map((w) => w.replace(/[^a-zäöüß0-9-]/gi, ''))
     .filter((w) => w.length >= 4 && !STOPWORDS.has(w));
@@ -629,10 +664,17 @@ function analyzeQueryCoverage(doc: ExtractedDoc, targetQueries: string[]): GeoQu
 
 // ─── Main entry ────────────────────────────────────────────────────────────
 
+function weightedScore(factors: GeoFactorResult[]): number {
+  const totalWeight = factors.reduce((sum, f) => sum + f.weight, 0);
+  return totalWeight > 0
+    ? clamp(factors.reduce((sum, f) => sum + f.score * f.weight, 0) / totalWeight)
+    : 0;
+}
+
 export function analyzeGeo(input: GeoAnalyzeInput): GeoAnalysis {
   const doc = extractContent(input.content, input.format ?? 'auto');
 
-  const factors: GeoFactorResult[] = [
+  const rawFactors: RawFactorResult[] = [
     analyzeCitations(doc),
     analyzeStatistics(doc),
     analyzeStructure(doc),
@@ -644,12 +686,18 @@ export function analyzeGeo(input: GeoAnalyzeInput): GeoAnalysis {
     analyzeSchemaMarkup(doc),
     analyzeKeywordHygiene(doc),
   ];
+  const factors: GeoFactorResult[] = rawFactors.map((f) => ({
+    ...f,
+    disciplines: FACTOR_DISCIPLINES[f.id] ?? [],
+  }));
 
   const applicable = factors.filter((f) => f.applicable);
-  const totalWeight = applicable.reduce((sum, f) => sum + f.weight, 0);
-  const geoScore = totalWeight > 0
-    ? clamp(applicable.reduce((sum, f) => sum + f.score * f.weight, 0) / totalWeight)
-    : 0;
+  const geoScore = weightedScore(applicable);
+  const disciplineScores = {
+    aeo: weightedScore(applicable.filter((f) => f.disciplines.includes('aeo'))),
+    geo: weightedScore(applicable.filter((f) => f.disciplines.includes('geo'))),
+    llmo: weightedScore(applicable.filter((f) => f.disciplines.includes('llmo'))),
+  };
 
   const grade: GeoAnalysis['grade'] =
     geoScore >= 85 ? 'A' : geoScore >= 70 ? 'B' : geoScore >= 55 ? 'C' : geoScore >= 40 ? 'D' : geoScore >= 25 ? 'E' : 'F';
@@ -680,6 +728,7 @@ export function analyzeGeo(input: GeoAnalyzeInput): GeoAnalysis {
   return {
     geoScore,
     grade,
+    disciplineScores,
     factors,
     recommendations,
     stats,
@@ -821,9 +870,60 @@ function crawlerBase(c: AiCrawler): Pick<CrawlerAccessResult, 'userAgent' | 'ope
   return { userAgent: c.userAgent, operator: c.operator, purpose: c.purpose, affects: c.affects };
 }
 
+// ─── llms.txt evaluation ───────────────────────────────────────────────────
+
+export interface LlmsTxtReport {
+  present: boolean;
+  /** Follows the llmstxt.org shape well enough to be useful (H1 + links). */
+  valid: boolean;
+  hasTitle: boolean;
+  hasSummary: boolean;
+  sectionCount: number;
+  linkCount: number;
+  findings: string[];
+  recommendations: string[];
+}
+
+/**
+ * Evaluate an llms.txt file against the llmstxt.org convention: an H1 title,
+ * an optional one-line `>` summary, and `##` sections of markdown link lists
+ * pointing at the pages LLMs should read first. Pass null/empty content for a
+ * site that has none — the report then explains what to add.
+ */
+export function evaluateLlmsTxt(content: string | null): LlmsTxtReport {
+  const findings: string[] = [];
+  const recommendations: string[] = [];
+
+  if (!content || content.trim().length === 0) {
+    recommendations.push(
+      'No llms.txt found. Publish /llms.txt (markdown: "# <site name>", one-line "> summary", "## <section>" link lists) so LLM crawlers and agents read your most citable pages first — see https://llmstxt.org/.',
+    );
+    return { present: false, valid: false, hasTitle: false, hasSummary: false, sectionCount: 0, linkCount: 0, findings, recommendations };
+  }
+
+  const text = content.trim();
+  const hasTitle = /^#\s+\S/.test(text);
+  const hasSummary = /^>\s+\S/m.test(text);
+  const sectionCount = (text.match(/^##\s+\S/gm) ?? []).length;
+  const linkCount = (text.match(/\[[^\]]+\]\(https?:\/\/[^)\s]+\)/g) ?? []).length;
+  const valid = hasTitle && linkCount > 0;
+
+  findings.push(`${sectionCount} section(s), ${linkCount} link(s)`);
+  if (hasTitle) findings.push('H1 title present');
+  if (hasSummary) findings.push('summary blockquote present');
+
+  if (!hasTitle) recommendations.push('Start llms.txt with an H1 title line: "# <site name>".');
+  if (!hasSummary) recommendations.push('Add a one-line summary blockquote ("> …") right under the title.');
+  if (linkCount === 0) recommendations.push('Add markdown link lists ("- [title](url): description") — without links the file steers nothing.');
+  if (recommendations.length === 0) recommendations.push('llms.txt looks well-formed — keep it curated to the pages you want cited.');
+
+  return { present: true, valid, hasTitle, hasSummary, sectionCount, linkCount, findings, recommendations };
+}
+
 /** Exposed for unit tests. */
 export const __INTERNALS = {
   FACTOR_WEIGHTS,
+  FACTOR_DISCIPLINES,
   detectFormat,
   parseRobotsTxt,
   robotsPathMatches,

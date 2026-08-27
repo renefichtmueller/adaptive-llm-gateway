@@ -1,22 +1,40 @@
-# GEO — Generative Engine Optimization
+# GEO, AEO & LLMO — the AI-visibility toolkit
 
-The gateway ships a complete GEO toolkit: it **scores** content against the
-factors that make AI engines cite you, **rewrites** it through the gateway's
-own LLM pipeline, and **measures your ranking** in generative answers with a
-recurring prompt-monitoring test — so you can optimize, verify, repeat.
+The gateway ships a complete toolkit for the AI-visibility discipline family:
+it **scores** content against the factors that make AI engines answer with and
+cite you (with a per-discipline lens for AEO, GEO and LLMO), **rewrites** it
+through the gateway's own LLM pipeline, and **measures your ranking** in
+generative answers with a recurring prompt-monitoring test — so you can
+optimize, verify, repeat. `geo` is the umbrella name of the module family and
+the `/v1/geo/*` routes.
 
-Distilled from two sources (also served machine-readable via
-`GET /v1/geo/knowledge`):
+## The discipline family
 
-- **Evergreen Media — Generative Engine Optimization (GEO) Ratgeber**
-  <https://www.evergreen.media/ratgeber/generative-engine-optimization/>
-  Practitioner framing: GEO is a layer on top of SEO; visibility comes from
+Not alternatives — layers of one funnel (Evergreen Media: "SEO vs. GEO ist ein
+Denkfehler"). Served machine-readable via `GET /v1/geo/knowledge`:
+
+| Layer | Goal | Where it shows up | Core levers |
+|---|---|---|---|
+| **SEO** | Rank in classic search | SERPs — and the indexes RAG engines retrieve from | crawlability, rankings |
+| **AEO** (Answer Engine Optimization) | Be **the** direct answer engines lift verbatim | featured snippets, People Also Ask, voice assistants, AI quick answers | question headings, 40–60-word answer blocks, FAQ/QAPage/Speakable schema |
+| **GEO** (Generative Engine Optimization) | Be **cited** inside AI-generated answers | ChatGPT, Perplexity, AI Overviews/AI Mode, Gemini, Copilot | statistics, quotes, cited sources, extractable fluent passages, AI-crawler access |
+| **LLMO** (Large Language Model Optimization) | Be **known** by the models themselves | parametric answers without live retrieval | Wikipedia/Wikidata, consistent entity facts, digital PR, community corpora |
+
+Distilled from these sources:
+
+- **Evergreen Media guides** — [GEO Ratgeber](https://www.evergreen.media/ratgeber/generative-engine-optimization/),
+  [AEO guide](https://www.evergreen.media/en/guide/answer-engine-optimization/),
+  [LLMO guide](https://www.evergreen.media/en/guide/large-language-model-optimization/),
+  [AI visibility](https://www.evergreen.media/en/guide/ai-search-visibility/).
+  Practitioner framing: layers on top of SEO; visibility comes from
   *entity → validation → community*; success is measured with prompt monitoring.
 - **Aggarwal et al., "GEO: Generative Engine Optimization", KDD 2024**
   <https://arxiv.org/abs/2311.09735>
   The Princeton/IIT-Delhi benchmark (~10k queries): adding quotations,
   statistics and cited sources lifts visibility in generative answers by up to
   ~40%; keyword stuffing measurably *reduces* it.
+- **llms.txt** <https://llmstxt.org/> — emerging convention for steering LLM
+  crawlers/agents to your most citable pages.
 
 ## Why this lives in the gateway
 
@@ -52,8 +70,13 @@ curl -s localhost:0000/v1/geo/analyze -H 'Content-Type: application/json' -d '{
 }'
 ```
 
-Returns `analysis.geoScore` (0–100), a grade (A–F), and per-factor scores with
-evidence + concrete recommendations. Factors and weights:
+Returns `analysis.geoScore` (0–100), a grade (A–F), per-factor scores with
+evidence + concrete recommendations, and `analysis.disciplineScores` — the
+same factors viewed through each discipline's lens (`aeo` / `geo` / `llmo`),
+so you see separately whether a page is snippet-ready (AEO), citation-ready
+(GEO) or entity-clear (LLMO). Note the LLMO lens only covers what is visible
+on-page (entity, E-E-A-T, hygiene); the off-page part of LLMO is playbook
+(knowledge endpoint) + measurement (ranking test). Factors and weights:
 
 | Factor | Weight | Backed by |
 |---|---|---|
@@ -82,6 +105,16 @@ OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot, …), separates
 ```bash
 curl -s localhost:0000/v1/geo/crawler-check -H 'Content-Type: application/json' \
   -d '{"url": "https://www.example.com"}'   # fetches /robots.txt itself
+```
+
+The counterpart for content discovery: `POST /v1/geo/llms-txt-check` audits
+your [llms.txt](https://llmstxt.org/) (presence, H1 title, summary, curated
+link sections) — robots.txt controls *access*, llms.txt steers *what LLM
+agents read first*.
+
+```bash
+curl -s localhost:0000/v1/geo/llms-txt-check -H 'Content-Type: application/json' \
+  -d '{"url": "https://www.example.com"}'   # fetches /llms.txt itself
 ```
 
 ## 3. Optimize content — `POST /v1/geo/optimize`
@@ -134,6 +167,11 @@ curl -s localhost:0000/v1/geo/ranking-test -H 'Content-Type: application/json' -
 }'
 ```
 
+The summary includes a **per-model** and a **per-category** breakdown (tag
+prompts in geo-targets.yaml with `category: commercial | faq | comparison | …`)
+so you see where visibility is won or lost — e.g. strong on FAQ-style AEO
+prompts but invisible on commercial "best X" prompts.
+
 Runs persist to Postgres (`geo_ranking_runs` / `geo_ranking_results`);
 `GET /v1/geo/ranking-history` returns them with a **trend** delta vs. the
 previous run of the same brand.
@@ -170,8 +208,8 @@ anyone remembering to click.
 
 | File | Purpose |
 |---|---|
-| `src/modules/geo-knowledge.ts` | Embedded playbook: techniques, engine types, AI crawlers, KPIs |
-| `src/modules/geo-analyzer.ts` | Deterministic scoring + robots.txt crawler audit |
+| `src/modules/geo-knowledge.ts` | Embedded playbook: disciplines (SEO/AEO/GEO/LLMO), techniques, engine types, AI crawlers, KPIs |
+| `src/modules/geo-analyzer.ts` | Deterministic scoring (with discipline lenses) + robots.txt crawler audit + llms.txt evaluation |
 | `src/modules/geo-optimizer.ts` | LLM rewrite with `[GEO-TODO]` fact-guard |
 | `src/modules/geo-ranking.ts` | Prompt monitoring: evaluation, aggregation, persistence |
 | `src/modules/geo-monitor.ts` | Default LLM runner + recurring schedule |

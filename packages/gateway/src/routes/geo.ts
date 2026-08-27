@@ -1,21 +1,25 @@
 /**
  * GEO routes — Generative Engine Optimization API
  * -----------------------------------------------
- *   GET  /v1/geo/knowledge        embedded GEO playbook (techniques, crawlers, KPIs)
+ *   GET  /v1/geo/knowledge        embedded playbook (disciplines, techniques, crawlers, KPIs)
  *   GET  /v1/geo/targets          resolved ranking-test configuration
- *   POST /v1/geo/analyze          score content (or a URL) against the GEO factors
+ *   POST /v1/geo/analyze          score content (or a URL) — incl. AEO/GEO/LLMO lenses
  *   POST /v1/geo/crawler-check    robots.txt audit for AI crawlers
+ *   POST /v1/geo/llms-txt-check   llms.txt presence + structure audit
  *   POST /v1/geo/optimize         LLM-assisted rewrite with before/after scores
  *   POST /v1/geo/ranking-test     run the brand-visibility test now
  *   GET  /v1/geo/ranking-history  persisted runs incl. trend vs. previous run
+ *
+ * "geo" is the route family's umbrella name: the toolkit covers the whole
+ * AI-visibility discipline family (GEO, AEO, LLMO) — see docs/geo.md.
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logger } from '../observability/logger.js';
 import { getPool } from '../db/client.js';
-import { analyzeGeo, checkAiCrawlerAccess } from '../modules/geo-analyzer.js';
-import { GEO_TECHNIQUES, GEO_SOURCES, GEO_ENGINE_TYPES, GEO_KPIS, AI_CRAWLERS } from '../modules/geo-knowledge.js';
+import { analyzeGeo, checkAiCrawlerAccess, evaluateLlmsTxt } from '../modules/geo-analyzer.js';
+import { GEO_TECHNIQUES, GEO_SOURCES, GEO_ENGINE_TYPES, GEO_DISCIPLINES, GEO_KPIS, AI_CRAWLERS } from '../modules/geo-knowledge.js';
 import { optimizeContentForGeo } from '../modules/geo-optimizer.js';
 import {
   loadGeoTargets,
@@ -46,6 +50,11 @@ const CrawlerCheckRequestSchema = z.object({
   robots_txt: z.string().max(200_000).optional(),
   url: z.string().url().optional(),
   path: z.string().max(2_000).optional().default('/'),
+});
+
+const LlmsTxtCheckRequestSchema = z.object({
+  content: z.string().max(200_000).optional(),
+  url: z.string().url().optional(),
 });
 
 const OptimizeRequestSchema = z.object({
@@ -105,6 +114,7 @@ export async function geoRoute(fastify: FastifyInstance): Promise<void> {
   // ── Knowledge base ──────────────────────────────────────────────────────
   fastify.get('/geo/knowledge', async (_request: FastifyRequest, reply: FastifyReply) => {
     return reply.send({
+      disciplines: GEO_DISCIPLINES,
       sources: GEO_SOURCES,
       engine_types: GEO_ENGINE_TYPES,
       techniques: GEO_TECHNIQUES,
@@ -198,6 +208,33 @@ export async function geoRoute(fastify: FastifyInstance): Promise<void> {
         message: err instanceof Error ? err.message : 'Crawler check failed',
       });
     }
+  });
+
+  // ── llms.txt audit ──────────────────────────────────────────────────────
+  fastify.post('/geo/llms-txt-check', async (request: FastifyRequest, reply: FastifyReply) => {
+    let body: z.infer<typeof LlmsTxtCheckRequestSchema>;
+    try {
+      body = LlmsTxtCheckRequestSchema.parse(request.body);
+    } catch (err) {
+      return badRequest(reply, zodMessage(err));
+    }
+    if (!body.content && !body.url) return badRequest(reply, 'Provide either "content" or "url"');
+
+    let llmsTxtUrl: string | null = null;
+    let content: string | null = body.content ?? null;
+    if (!content && body.url) {
+      const origin = new URL(body.url).origin;
+      llmsTxtUrl = `${origin}/llms.txt`;
+      try {
+        content = await fetchText(llmsTxtUrl);
+      } catch (err) {
+        // Missing llms.txt is a finding, not an error — report absence.
+        logger.info({ err, llmsTxtUrl }, 'geo: llms.txt not reachable, reporting as absent');
+        content = null;
+      }
+    }
+    const report = evaluateLlmsTxt(content);
+    return reply.send({ report, llms_txt_url: llmsTxtUrl, timestamp: new Date().toISOString() });
   });
 
   // ── LLM-assisted optimization ───────────────────────────────────────────

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS geo_ranking_results (
   model               TEXT NOT NULL,
   prompt_id           TEXT NOT NULL,
   prompt_text         TEXT NOT NULL,
+  prompt_category     TEXT,                         -- e.g. 'commercial' | 'faq' | 'comparison'
   answered            BOOLEAN NOT NULL DEFAULT TRUE,
   brand_mentioned     BOOLEAN NOT NULL DEFAULT FALSE,
   mention_count       INT NOT NULL DEFAULT 0,
