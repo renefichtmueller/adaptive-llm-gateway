@@ -95,6 +95,20 @@ weiteren DNS-Antrag, es genügt ein vHost im Reverse Proxy.
 | `piper.beo.<basisdomain>` | `http://127.0.0.1:<PIPER_PORT>` | Piper-Server, TTS-Backend (`PIPER_URL`) | intern/VPN |
 | `federation.beo.<basisdomain>` | `http://127.0.0.1:<PORT>/v1/federation/ingest` | Peer-Stats-Ingest — nur bei `FEDERATION_ENABLED=1` | öffentlich bei Peers |
 
+### Weitere interne Hosts hinter dem Beo-Proxy (Ziele je Host eintragen)
+
+Dank Wildcard-DNS bekommt jeder weitere interne Host ohne DNS-Antrag eine
+Subdomain; der Beo-Proxy terminiert TLS und leitet intern weiter (die
+Ziel-Hosts brauchen kein eigenes Zertifikat):
+
+| Subdomain | Weiterleitung auf (Endpunkt) | Zugriff |
+|---|---|---|
+| `karo.beo.<basisdomain>` | `http://<Karo-IP>:<Port>` | nach Bedarf |
+| `lupo.beo.<basisdomain>` | `http://<Lupo-IP>:<Port>` | nach Bedarf |
+| `fossy.beo.<basisdomain>` | `http://<Fossy-IP>:<Port>` | nach Bedarf |
+| `tip.beo.<basisdomain>` | `http://<Tip-IP>:<Port>` | nach Bedarf |
+| `<name>.beo.<basisdomain>` | `http://<IP>:<Port>` (Muster für jeden weiteren Host) | nach Bedarf |
+
 ### P3 — optional, nur bei Multi-Host-Setup
 
 Die 8 Subscription-Bridges (`claude`, `chatgpt`, `codex`, `copilot`, `m365`, `gemini`,
