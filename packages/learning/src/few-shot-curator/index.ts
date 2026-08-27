@@ -221,6 +221,27 @@ export async function runFewShotCurator(): Promise<void> {
   const allHighConf = [...highConfResult.rows, ...directHighConfResult.rows];
   logger.info({ count: allHighConf.length }, 'Pulled high-confidence outputs');
 
+  // Feed the fine-tuning corpus: every high-confidence pair with a real
+  // input becomes a training example (deduped per llm_call).
+  let corpusAdded = 0;
+  for (const output of allHighConf) {
+    if (!output.input_text) continue;
+    try {
+      const inserted = await query(
+        `INSERT INTO learning_corpus (call_id, task_type, prompt_text, completion_text, quality_score)
+         SELECT $1::uuid, $2, $3, $4, $5
+         WHERE NOT EXISTS (SELECT 1 FROM learning_corpus WHERE call_id = $1::uuid)`,
+        [output.id, output.task_type, output.input_text, output.output_text, output.confidence],
+      );
+      corpusAdded += inserted.rowCount ?? 0;
+    } catch (err) {
+      logger.warn({ err, callId: output.id }, 'Failed to add example to learning corpus');
+    }
+  }
+  if (corpusAdded > 0) {
+    logger.info({ corpusAdded }, 'Added training examples to learning_corpus');
+  }
+
   // 2. Pull rejected outputs for negative examples
   const rejectedResult = await query<RejectedOutput>(
     `SELECT rq.id, rq.call_id, rq.task_type, rq.input_text, rq.output_text, rq.reviewer_notes

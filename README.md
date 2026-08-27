@@ -229,6 +229,16 @@ Everything learns without manual steps:
   (12 h), daily learning report (02:00), fine-tuning trigger (Sunday 03:00).
   It shares the gateway database and signals config reloads through
   `POST /internal/reload-config` (shared `INTERNAL_SECRET`).
+- **Learned ban terms go live automatically**: phrases the ban learner
+  promotes in `ban_candidates` are loaded into the active banlist every
+  30 minutes — no restart, no manual list editing
+  (`LEARNED_BANLIST_ENABLED=0` disables).
+- **Training sets build themselves**: the few-shot curator feeds every
+  high-confidence completion into `learning_corpus`; once a task type
+  crosses `FINE_TUNING_MIN_EXAMPLES` (default 500), the weekly trigger
+  records a run in `fine_tuning_runs` and exports the examples as JSONL to
+  `FINE_TUNING_EXPORT_DIR` (default `./fine-tuning-exports`), ready for
+  LoRA fine-tuning of the base model.
 
 Note for container setups: jobs that rewrite `routing-rules.yaml` or prompt
 templates only reach the gateway's copy when both services share those paths

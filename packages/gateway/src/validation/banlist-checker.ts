@@ -2,6 +2,7 @@ import { EN_BANLIST } from '../banlists/en.js';
 import { DE_BANLIST } from '../banlists/de.js';
 import { AUTO_DETECTED_BANLIST } from '../banlists/auto-detected.js';
 import { getBanlistEntries } from '../banlists/sync-banlists.js';
+import { getLearnedBanlistEntries } from '../banlists/learned-banlist.js';
 
 export interface BanViolation {
   term: string;
@@ -91,6 +92,14 @@ export function checkBanlist(
     (e) => e.language === 'auto' || e.language === language,
   );
   violations.push(...checkList(text, relevantGiteaEntries, 'gitea'));
+
+  // Learned additions (ban-learner promotions from ban_candidates)
+  const learnedEntries = getLearnedBanlistEntries().filter(
+    (e) => e.language === 'auto' || language === 'auto' || e.language === language,
+  );
+  for (const entry of learnedEntries) {
+    violations.push(...checkList(text, [entry], entry.language));
+  }
 
   // Deduplicate by term+position
   const seen = new Set<string>();

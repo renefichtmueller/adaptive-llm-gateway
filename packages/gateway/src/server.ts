@@ -21,6 +21,7 @@ import { loadPlugins } from './modules/plugin-system.js';
 import { startBridgeWatchdog } from './modules/bridge-watchdog.js';
 import { ingestPeerStats, scheduleFederationPublisher, buildStats } from './modules/federated-stats.js';
 import { scheduleAdaptiveLearner, getAllRecommendations } from './modules/adaptive-routing.js';
+import { scheduleLearnedBanlistRefresh } from './banlists/learned-banlist.js';
 import { staticRoute } from './routes/static.js';
 import { getPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
@@ -245,9 +246,11 @@ async function main() {
     }
 
     // Adaptive routing learner (cost-aware recommendations from llm_calls)
+    // + learned banlist (ban-learner promotions become active ban terms)
     try {
       const pool = getPool();
       scheduleAdaptiveLearner(pool);
+      scheduleLearnedBanlistRefresh(pool);
     } catch (err) {
       logger.warn({ err }, 'Adaptive learner scheduling failed');
     }
