@@ -1,7 +1,7 @@
 From 1d82d4676539271c561e5d6222c6bea24ecc0cc4 Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 05:57:16 +0000
-Subject: [PATCH 1/7] fix(pwa): salvage the meeting audio when iOS kills the
+Subject: [PATCH 1/8] fix(pwa): salvage the meeting audio when iOS kills the
  recorder
 
 Bei Bildschirmsperre oder App-Wechsel suspendiert iOS die Seite und beendet

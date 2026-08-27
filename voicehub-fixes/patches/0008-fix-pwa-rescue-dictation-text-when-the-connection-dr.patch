@@ -1,0 +1,179 @@
+From 87a96076e92c6d70056e952557f30b15f64871c3 Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Thu, 27 Aug 2026 09:13:02 +0000
+Subject: [PATCH 8/8] fix(pwa): rescue dictation text when the connection drops
+ mid-recording
+
+Riss die WebSocket-Verbindung mitten im Live-Diktat ab (real passiert am
+27.08 waehrend eines Calls, mutmasslich beim 4-h-Session-Ablauf, der auch
+laufende WebSockets trennt), warf die App den bisher erkannten Text weg:
+abortToIdle() liess ihn nur als Anzeige zurueck, ohne Save-Pfad -- der
+Review-Zustand mit "Markdown sichern" war nie erreichbar, weil das finale
+Transkript fehlte.
+
+Jetzt rettet salvageDictationOrIdle() den letzten bestaetigten Stand plus
+Tentativtext in den Review-Zustand; dort gibt es zusaetzlich einen neuen
+"Text kopieren"-Button (Zwischenablage, funktioniert auch ohne Server --
+genau der Fall, in dem "Markdown sichern" scheitern wuerde). Leerer
+Erkennungsstand faellt weiter auf idle zurueck.
+---
+ docs/project-log.md   |  5 ++++
+ web/public/index.html |  1 +
+ web/public/js/app.js  | 60 +++++++++++++++++++++++++++++++++++++++----
+ 3 files changed, 61 insertions(+), 5 deletions(-)
+
+diff --git a/docs/project-log.md b/docs/project-log.md
+index d250e8a..9a9d2cf 100644
+--- a/docs/project-log.md
++++ b/docs/project-log.md
+@@ -34,6 +34,11 @@ integriert):
+    voicehub-pi-recorder.service und voicehub-pi-uploader.timer --
+    Warteschlange mit Retry statt manueller curl-Kette; schliesst das
+    Thin-Client-Gate aus Issue #4 bis auf DNS/TLS.
++7. PWA: Diktat-Rettung -- reisst die WebSocket-Verbindung mitten im
++   Live-Diktat ab (real passiert am 27.08 waehrend eines Calls, mutmasslich
++   Session-Ablauf nach 4 h), wandert der bisher erkannte Text in den
++   Review-Zustand statt zu verfallen; dort gibt es jetzt zusaetzlich einen
++   "Text kopieren"-Button, der ohne Server funktioniert.
+ 
+ Evidence: node --check fuer app.js, meeting-recorder.js, chunk-vault.js
+ und sw.js; bash -n fuer das Pi-Skript; YAML-, plist- und systemd-Parse-
+diff --git a/web/public/index.html b/web/public/index.html
+index 5bc8e0d..57c0bb4 100644
+--- a/web/public/index.html
++++ b/web/public/index.html
+@@ -1344,6 +1344,7 @@
+           </button>
+           <button class="btn" id="stop-paused-btn" hidden>Meeting beenden</button>
+           <button class="btn" id="retry-meeting-upload-btn" hidden>Verarbeitung erneut versuchen</button>
++          <button class="btn" id="copy-transcript-btn" hidden>Text kopieren</button>
+           <button class="btn primary" id="save-btn" hidden>Markdown sichern</button>
+         </div>
+         <div class="record-hint" id="hint">DGX-only &middot; kein lokaler Inferenz-Fallback</div>
+diff --git a/web/public/js/app.js b/web/public/js/app.js
+index ebb575d..4a69adf 100644
+--- a/web/public/js/app.js
++++ b/web/public/js/app.js
+@@ -12,6 +12,7 @@ const micIcon = document.getElementById('mic-icon');
+ const stopIcon = document.getElementById('stop-icon');
+ const discardBtn = document.getElementById('discard-btn');
+ const saveBtn = document.getElementById('save-btn');
++const copyTranscriptBtn = document.getElementById('copy-transcript-btn');
+ const hintEl = document.getElementById('hint');
+ const toastEl = document.getElementById('toast');
+ const statusDot = document.getElementById('status-dot');
+@@ -141,6 +142,11 @@ let meetingRecorder = null;
+ let speakerMonitorQueue = Promise.resolve();
+ let waveAnimationId = null;
+ let finalText = '';
++// Letzter Stand des Live-Diktats -- die Rettungskopie fuer den Fall, dass
++// die Verbindung vor dem finalen Transkript abreisst. Ohne sie existiert
++// der erkannte Text nur als Pixel auf dem Bildschirm (Vorfall 27.08.).
++let lastDictationWords = [];
++let lastDictationTentative = '';
+ let currentMeetingId = null;
+ let currentMeeting = null;
+ let meetingMonitorId = null;
+@@ -319,6 +325,7 @@ function setState(next) {
+   setVisible(waveEl, state === 'recording');
+   setVisible(discardBtn, state === 'reviewing' || state === 'saving');
+   setVisible(saveBtn, state === 'reviewing' || state === 'saving');
++  if (copyTranscriptBtn) setVisible(copyTranscriptBtn, state === 'reviewing' || state === 'saving');
+   setVisible(stopPausedBtn, state === 'paused');
+   setVisible(retryMeetingUploadBtn, state === 'reviewing' && Boolean(pendingMeetingUpload));
+   const meetingCaptureVisible = isMeetingModeSelected() && (state === 'recording' || state === 'paused');
+@@ -961,6 +968,31 @@ function abortToIdle() {
+   setState('idle');
+ }
+ 
++/// Verbindungsabriss mitten im Live-Diktat: Der bisher erkannte Text wandert
++/// in den Review-Zustand (mit "Markdown sichern" und "Text kopieren") statt
++/// als blosse Anzeige zu verfallen -- vorher ging beim Abriss alles ausser
++/// den Pixeln auf dem Bildschirm verloren (27.08.). Ohne erkannten Text
++/// bleibt es beim bisherigen Abbruch nach idle.
++function salvageDictationOrIdle(message) {
++  const salvaged = [
++    lastDictationWords.map((word) => word.text).join(' '),
++    lastDictationTentative,
++  ].filter((part) => part.trim()).join(' ').trim();
++  if (!salvaged) {
++    showHint(message, true);
++    abortToIdle();
++    return;
++  }
++  stopWaveAnimation();
++  capture?.stop();
++  capture = null;
++  session = null;
++  finalText = salvaged;
++  renderTranscript(lastDictationWords, lastDictationTentative);
++  setState('reviewing');
++  showHint(`${message} Der bisher erkannte Text ist gerettet – „Markdown sichern“ speichert ihn, „Text kopieren“ holt ihn in die Zwischenablage.`, true);
++}
++
+ async function startRecording() {
+   if (!requireServerAvailable()) return;
+   if (isMeetingModeSelected()) {
+@@ -970,10 +1002,14 @@ async function startRecording() {
+   setState('connecting');
+   resetHint();
+   finalText = '';
++  lastDictationWords = [];
++  lastDictationTentative = '';
+ 
+   session = new DictationSession();
+   session.addEventListener('transcript', (event) => {
+     const { confirmedWords, tentativeText, isFinal } = event.detail;
++    lastDictationWords = confirmedWords;
++    lastDictationTentative = tentativeText || '';
+     renderTranscript(confirmedWords, tentativeText);
+     if (isFinal) {
+       finalText = confirmedWords.map((w) => w.text).join(' ');
+@@ -981,18 +1017,19 @@ async function startRecording() {
+     }
+   });
+   session.addEventListener('error', (event) => {
+-    showHint(event.detail, true);
+     // A server-side error usually precedes the server closing the socket --
+     // without a state reset the UI would be stuck (record button disabled
+-    // in connecting/finishing, no other controls visible).
++    // in connecting/finishing, no other controls visible). Erkannter Text
++    // wird dabei gerettet statt verworfen.
+     if (state === 'recording' || state === 'connecting' || state === 'finishing') {
+-      abortToIdle();
++      salvageDictationOrIdle(event.detail);
++    } else {
++      showHint(event.detail, true);
+     }
+   });
+   session.addEventListener('close', () => {
+     if (state === 'recording' || state === 'connecting' || state === 'finishing') {
+-      showHint('Verbindung zu VoiceHub getrennt.', true);
+-      abortToIdle();
++      salvageDictationOrIdle('Verbindung zu VoiceHub getrennt.');
+     }
+   });
+ 
+@@ -2899,6 +2936,19 @@ recordBtn.addEventListener('click', () => {
+   else if (state === 'recording') stopRecording();
+   else if (state === 'paused') resumeMeetingRecording();
+ });
++copyTranscriptBtn?.addEventListener('click', async () => {
++  const text = finalText.trim() || transcriptEl.innerText.trim();
++  if (!text) {
++    showToast('Kein Text zum Kopieren vorhanden.');
++    return;
++  }
++  try {
++    await navigator.clipboard.writeText(text);
++    showToast('Text in die Zwischenablage kopiert.');
++  } catch {
++    showToast('Kopieren blockiert – Text bitte manuell markieren.');
++  }
++});
+ modeSelect.addEventListener('change', () => setState(state));
+ participantsInput.addEventListener('input', () => setState(state));
+ prepareMeetingBtn.addEventListener('click', prepareMeetingLobby);
+-- 
+2.43.0
+

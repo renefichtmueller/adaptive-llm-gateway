@@ -19,7 +19,7 @@ git am /pfad/zu/voicehub-fixes/patches/*.patch
 Falls `main` inzwischen weitergewandert ist und ein Patch nicht greift:
 `git am -3` nutzt die mitgelieferten Blob-Referenzen für einen 3-Wege-Merge.
 
-## Inhalt (7 Patches)
+## Inhalt (8 Patches)
 
 1. **fix(pwa)** `meeting-recorder.js`: `stop()` liefert auch bei einem von
    iOS still beendeten Recorder die gesammelten Chunks aus (der 25.08-
@@ -45,6 +45,11 @@ Falls `main` inzwischen weitergewandert ist und ein Patch nicht greift:
    – Jabra-Aufnahme in eine retry-sichere Upload-Warteschlange statt
    manueller `arecord`/`curl`-Kette (Issue #4 Thin-Client-Gate).
 7. **docs**: `project-log.md`-Eintrag zum Vorfall und zur Serie.
+8. **fix(pwa)** Diktat-Rettung: Reißt die WebSocket-Verbindung mitten im
+   Live-Diktat ab (passiert real beim 4-h-Session-Ablauf, der auch laufende
+   WebSockets trennt), wandert der bisher erkannte Text in den
+   Review-Zustand statt zu verfallen; dazu neuer „Text kopieren“-Button,
+   der auch ohne erreichbaren Server funktioniert.
 
 ## Verifiziert (ohne Gerät)
 
