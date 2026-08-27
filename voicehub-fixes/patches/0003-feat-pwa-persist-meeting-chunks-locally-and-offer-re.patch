@@ -1,7 +1,7 @@
 From 9695d6bb64e04c55ebc604eb720fc2891074337a Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 06:00:53 +0000
-Subject: [PATCH 3/9] feat(pwa): persist meeting chunks locally and offer
+Subject: [PATCH 03/10] feat(pwa): persist meeting chunks locally and offer
  recovery
 
 Die Meeting-Aufnahme lebte bislang ausschliesslich im RAM des Tabs; wurde

@@ -19,7 +19,7 @@ git am /pfad/zu/voicehub-fixes/patches/*.patch
 Falls `main` inzwischen weitergewandert ist und ein Patch nicht greift:
 `git am -3` nutzt die mitgelieferten Blob-Referenzen für einen 3-Wege-Merge.
 
-## Inhalt (9 Patches)
+## Inhalt (10 Patches)
 
 1. **fix(pwa)** `meeting-recorder.js`: `stop()` liefert auch bei einem von
    iOS still beendeten Recorder die gesammelten Chunks aus (der 25.08-
@@ -75,3 +75,8 @@ Falls `main` inzwischen weitergewandert ist und ein Patch nicht greift:
 Login der nativen App (OIDC-Handoff), Meeting-Gate-Parität der App,
 TestFlight – das ist der größere Umbau aus dem Konzept „VoiceHub Native“
 (27.08) und braucht eigene Slices inkl. Server-Endpunkten.
+
+**Patch 0010 – docs:** `docs/slices/r1-implementation-specs.md` – die sechs
+R1-Slices als implementierungsfertige Spezifikationen (Scope, API-Vertrag,
+UX-Akzeptanz, Schließbeweis), damit die Umsetzung im echten Checkout ohne
+Klärungsrunde starten kann.
