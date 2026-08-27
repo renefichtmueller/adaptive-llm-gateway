@@ -143,7 +143,7 @@ Detects: email, phone (E.164 + DE national), credit cards (Luhn-validated), IBAN
 
 ### 🧠 Cost-aware Adaptive Routing
 
-Reads `llm_calls` every 15 min, groups by (`task_type`, `model_used`), computes success-rate (confidence ≥ threshold) and average cost. Picks the Pareto-frontier winner per task. Publishes recommendations the router consults before the static `routing-rules.yaml`. Self-improving — no manual tuning.
+Reads `llm_calls` every 15 min, groups by (`task_type`, `model_used`), computes success-rate (confidence ≥ threshold) and average cost. Picks the Pareto-frontier winner per task. The router consults these recommendations on every request without an explicit `model:` override, before falling back to the static `routing-rules.yaml`. Recommendations are persisted in the `adaptive_routing` table and warm-started after a restart. On by default (`ADAPTIVE_ROUTING_ENABLED=0` disables). Self-improving — no manual tuning.
 
 ### 🔌 MCP Server Mode
 
@@ -211,6 +211,29 @@ docker compose up -d
 ```
 
 Postgres bundles automatically. Subscription CLIs live on the host — Docker can't authenticate your Claude Max subscription for you.
+
+### Autonomous learning loop
+
+Everything learns without manual steps:
+
+- **The gateway migrates its own database at boot** (`db/migrate.ts`) — no
+  psql session needed; `scripts/init-db.sh` exists only for pre-provisioning.
+- **In-process learning cycles** run 2 minutes after boot and then every
+  6/12/24 h: they aggregate `routing_decisions` into `model_performance` and
+  flag underperforming or slow models.
+- **Adaptive routing** trains every 15 minutes from real traffic and reroutes
+  task types to the cheapest model that keeps confidence up (see above).
+- **The learning engine** (`llm-learning` service in Docker Compose, or
+  `npm run learning` on the host) runs six scheduled jobs: ban learner
+  (30 min), few-shot curator (1 h), routing optimizer (6 h), prompt optimizer
+  (12 h), daily learning report (02:00), fine-tuning trigger (Sunday 03:00).
+  It shares the gateway database and signals config reloads through
+  `POST /internal/reload-config` (shared `INTERNAL_SECRET`).
+
+Note for container setups: jobs that rewrite `routing-rules.yaml` or prompt
+templates only reach the gateway's copy when both services share those paths
+(volume mount) or when the learning engine runs on the host next to the
+checkout. Their analysis results land in the shared database either way.
 
 ---
 

@@ -120,11 +120,13 @@ async function detectImprovements(
 async function analyzeAndImprove(pool: any, duration: string): Promise<number> {
   let changes = 0;
 
-  // 1. Update model_performance aggregates
+  // 1. Update model_performance aggregates.
+  // success_rate is stored as a fraction 0–1 (matching detectImprovements
+  // and the learning-insights route), NOT as a percentage.
   const updatePerf = await pool.query(
     `UPDATE model_performance mp
      SET
-       success_rate = (SELECT ROUND((SUM(CASE WHEN success THEN 1 ELSE 0 END)::float / COUNT(*) * 100)::numeric, 2)
+       success_rate = (SELECT ROUND((SUM(CASE WHEN success THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0))::numeric, 4)
                        FROM routing_decisions rd
                        WHERE rd.routing_model = mp.model
                          AND (mp.task_type IS NULL OR rd.task_type = mp.task_type)
@@ -155,7 +157,7 @@ async function analyzeAndImprove(pool: any, duration: string): Promise<number> {
     `SELECT DISTINCT ON (task_type)
        task_type,
        routing_model,
-       ROUND((SUM(CASE WHEN success THEN 1 ELSE 0 END)::float / COUNT(*) * 100)::numeric, 2) as success_rate,
+       ROUND((SUM(CASE WHEN success THEN 1 ELSE 0 END)::float / COUNT(*))::numeric, 4) as success_rate,
        AVG(latency_ms)::int as avg_latency_ms
      FROM routing_decisions rd
      WHERE created_at > NOW() - INTERVAL '1 day'
@@ -212,6 +214,12 @@ async function logCycle(
 }
 
 export async function scheduleLearningCycles(): Promise<void> {
+  // Initial cycle shortly after boot so learning starts immediately instead
+  // of waiting six hours for the first interval to elapse.
+  setTimeout(() => {
+    void runLearningCycle('6h');
+  }, 2 * 60 * 1000);
+
   // Run cycles at intervals
   setInterval(async () => {
     await runLearningCycle('6h');
@@ -225,5 +233,5 @@ export async function scheduleLearningCycles(): Promise<void> {
     await runLearningCycle('24h');
   }, 24 * 60 * 60 * 1000);
 
-  logger.info('Learning cycles scheduled (6h, 12h, 24h)');
+  logger.info('Learning cycles scheduled (6h, 12h, 24h; first cycle in 2 min)');
 }

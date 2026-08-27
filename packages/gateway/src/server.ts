@@ -11,6 +11,7 @@ import { reviewRoute } from './routes/review.js';
 import { dashboardRoute } from './routes/dashboard.js';
 import { streamRoute } from './routes/stream.js';
 import { learningInsightsRoute } from './routes/learning-insights.js';
+import { internalRoute } from './routes/internal.js';
 import { embeddingsRoute } from './routes/embeddings.js';
 import { replayRoute } from './routes/replay.js';
 import { audioRoute } from './routes/audio.js';
@@ -139,6 +140,7 @@ async function buildServer() {
   await server.register(classifyRoute, { prefix: '/v1' });
   await server.register(reviewRoute, { prefix: '/v1' });
   await server.register(learningInsightsRoute, { prefix: '/v1' });
+  await server.register(internalRoute);
   await server.register(healthRoute);
   await server.register(metricsRoute);
   await server.register(staticRoute);

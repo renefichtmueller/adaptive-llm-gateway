@@ -70,6 +70,29 @@ services:
     networks:
       - gateway-net
 
+  # Autonomous learning engine: ban learner (30 min), few-shot curator (1h),
+  # routing optimizer (6h), prompt optimizer (12h), daily learning report,
+  # weekly fine-tuning trigger. Shares the gateway database; calls the
+  # gateway for internal LLM analysis and config reloads.
+  llm-learning:
+    build:
+      context: .
+      dockerfile: Dockerfile.learning
+    container_name: llm-learning
+    environment:
+      DATABASE_URL: "postgresql://gateway:gateway@postgres:5432/llm_gateway"
+      GATEWAY_URL: "http://llm-gateway:8787"
+      INTERNAL_SECRET: "${INTERNAL_SECRET:-internal-learning-secret}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - gateway-net
+
 networks:
   gateway-net:
     driver: bridge

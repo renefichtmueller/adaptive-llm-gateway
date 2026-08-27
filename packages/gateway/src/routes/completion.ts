@@ -260,6 +260,34 @@ async function classifyAndRoute(taskType: string | undefined, caller: string, in
     throw new Error(err instanceof Error ? err.message : 'Failed to route request');
   }
 
+  // Adaptive routing: when the caller did not pin a model explicitly, prefer
+  // what the learner has found to work best (and cheapest) for this task
+  // type. The learned fallback chain goes first; the static chain remains as
+  // the tail so we never lose coverage.
+  if (!options?.model) {
+    const reco = getAdaptiveRecommendation(resolved);
+    if (reco && reco.preferredModel !== decision.model) {
+      const staticTail = decision.fallback_chain.filter(
+        (m) => m !== reco.preferredModel && !reco.fallbackChain.includes(m),
+      );
+      logger.info(
+        {
+          taskType: resolved,
+          staticModel: decision.model,
+          adaptiveModel: reco.preferredModel,
+          samples: reco.rationale.samples,
+          successRate: reco.rationale.successRate,
+        },
+        'Adaptive routing recommendation applied',
+      );
+      decision = {
+        ...decision,
+        model: reco.preferredModel,
+        fallback_chain: [reco.preferredModel, ...reco.fallbackChain, ...staticTail],
+      };
+    }
+  }
+
   return { taskType: resolved, decision, classificationResult };
 }
 

@@ -169,6 +169,7 @@ interface HighConfOutput {
 
 interface RejectedOutput {
   id: string;
+  call_id: string | null;
   task_type: string;
   input_text: string;
   output_text: string;
@@ -222,7 +223,7 @@ export async function runFewShotCurator(): Promise<void> {
 
   // 2. Pull rejected outputs for negative examples
   const rejectedResult = await query<RejectedOutput>(
-    `SELECT rq.id, rq.task_type, rq.input_text, rq.output_text, rq.reviewer_notes
+    `SELECT rq.id, rq.call_id, rq.task_type, rq.input_text, rq.output_text, rq.reviewer_notes
      FROM review_queue rq
      WHERE rq.decision = 'rejected'
        AND rq.reviewed_at > now() - interval '7 days'
@@ -350,14 +351,16 @@ export async function runFewShotCurator(): Promise<void> {
       `Added negative example from review_queue rejection`,
     );
 
-    // Store in few_shot_candidates as negative
+    // Store in few_shot_candidates as negative. llm_call_id is carried so
+    // the dedup check above recognizes already-processed rejections.
     await query(
       `INSERT INTO few_shot_candidates
-         (task_type, input_text, output_text, confidence, is_negative, negative_reason, promoted, promoted_at, template_version)
-       VALUES ($1, $2, $3, 0, true, $4, true, now(), $5)
+         (task_type, llm_call_id, input_text, output_text, confidence, is_negative, negative_reason, promoted, promoted_at, template_version)
+       VALUES ($1, $2, $3, $4, 0, true, $5, true, now(), $6)
        ON CONFLICT DO NOTHING`,
       [
         rejected.task_type,
+        rejected.call_id,
         rejected.input_text,
         rejected.output_text,
         rejected.reviewer_notes ?? 'rejected',
