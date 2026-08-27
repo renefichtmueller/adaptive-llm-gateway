@@ -1,0 +1,137 @@
+From e0e6939ce1d52443dd3661b09a66932d63e20f6c Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Thu, 27 Aug 2026 05:57:16 +0000
+Subject: [PATCH 01/11] fix(pwa): salvage the meeting audio when iOS kills the
+ recorder
+
+Bei Bildschirmsperre oder App-Wechsel suspendiert iOS die Seite und beendet
+oder mutet den Mikrofon-Track still -- MediaRecorder meldet nichts, und
+stop() warf danach nur noch "Keine aktive Meeting-Aufnahme vorhanden",
+womit das komplette bis dahin aufgenommene Audio im Speicher gestrandet war
+(Meeting-Verlust am 25.08.).
+
+stop() liefert jetzt auch bei totem Recorder die bereits gesammelten Chunks
+als Blob aus; Track-Events (mute/unmute/ended) und MediaRecorder-Fehler
+werden als Events gemeldet, damit app.js ehrlich pausieren kann statt
+Stille aufzuzeichnen. Dazu micLive/hasAudio-Getter und Aufraeumen des
+Konstruktors (toter _callStream-Zugriff vor Initialisierung).
+---
+ web/public/js/meeting-recorder.js | 65 ++++++++++++++++++++++---------
+ 1 file changed, 47 insertions(+), 18 deletions(-)
+
+diff --git a/web/public/js/meeting-recorder.js b/web/public/js/meeting-recorder.js
+index 8bf94c9..ab6f0ae 100644
+--- a/web/public/js/meeting-recorder.js
++++ b/web/public/js/meeting-recorder.js
+@@ -13,7 +13,6 @@ export class MeetingRecorder extends EventTarget {
+     this._released = false;
+     this._mediaRecorder = null;
+     this._chunks = [];
+-    this._callStream?.getTracks().forEach((track) => track.stop());
+     this._stream = null;
+     this._callStream = null;
+     this._mixedStream = null;
+@@ -22,8 +21,6 @@ export class MeetingRecorder extends EventTarget {
+     this._levelData = null;
+     this._speakerSequence = 0;
+     this._speakerAudioEndMs = 0;
+-    this._callStream = null;
+-    this._mixedStream = null;
+   }
+ 
+   /**
+@@ -37,6 +34,14 @@ export class MeetingRecorder extends EventTarget {
+     this._stream = await navigator.mediaDevices.getUserMedia({
+       audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+     });
++    // iOS suspendiert die Seite bei Bildschirmsperre oder App-Wechsel und
++    // mutet oder beendet dabei den Mikrofon-Track, ohne dass MediaRecorder
++    // selbst einen Fehler meldet. Diese Track-Events sind die einzige
++    // ehrliche Auskunft darueber, ob noch Audio ankommt (Vorfall 25.08.).
++    const micTrack = this._stream.getAudioTracks()[0];
++    micTrack?.addEventListener('mute', () => this.dispatchEvent(new CustomEvent('micmuted')));
++    micTrack?.addEventListener('unmute', () => this.dispatchEvent(new CustomEvent('micunmuted')));
++    micTrack?.addEventListener('ended', () => this.dispatchEvent(new CustomEvent('micended')));
+     this._audioContext = new AudioContext();
+ 
+     // Video calls: the microphone only carries the local room. Remote
+@@ -86,6 +91,11 @@ export class MeetingRecorder extends EventTarget {
+     }
+     this._mediaRecorder = new MediaRecorder(recordedStream, { mimeType });
+     this._chunks = [];
++    this._mediaRecorder.addEventListener('error', (event) => {
++      this.dispatchEvent(new CustomEvent('recordererror', {
++        detail: event.error?.message || 'MediaRecorder-Fehler',
++      }));
++    });
+     this._mediaRecorder.addEventListener('dataavailable', (event) => {
+       if (event.data.size > 0) {
+         this._chunks.push(event.data);
+@@ -122,23 +132,29 @@ export class MeetingRecorder extends EventTarget {
+     return Math.sqrt(sumOfSquares / this._levelData.length);
+   }
+ 
+-  /** Stops capture and resolves with the complete recording as a Blob. */
++  /** Stops capture and resolves with the complete recording as a Blob.
++   *  Resolves with the already-gathered chunks when the native recorder is
++   *  no longer active: iOS beendet MediaRecorder still, wenn die Seite
++   *  suspendiert wird (Sperre, App-Wechsel) -- das bis dahin aufgenommene
++   *  Audio waere sonst im Speicher gestrandet, ohne Weg zum Upload. */
+   stop() {
+-    return new Promise((resolve) => {
+-      if (!this._mediaRecorder || this._mediaRecorder.state === 'inactive') {
+-        throw new Error('Keine aktive Meeting-Aufnahme vorhanden.');
++    return new Promise((resolve, reject) => {
++      if (!this._mediaRecorder || (this._mediaRecorder.state === 'inactive' && this._chunks.length === 0)) {
++        reject(new Error('Keine aktive Meeting-Aufnahme vorhanden.'));
++        return;
++      }
++      const finalize = () => {
++        const blob = new Blob(this._chunks, { type: this._mediaRecorder.mimeType });
++        this._stream?.getTracks().forEach((track) => track.stop());
++        this._callStream?.getTracks().forEach((track) => track.stop());
++        this._audioContext?.close();
++        resolve(blob);
++      };
++      if (this._mediaRecorder.state === 'inactive') {
++        finalize();
++        return;
+       }
+-      this._mediaRecorder.addEventListener(
+-        'stop',
+-        () => {
+-          const blob = new Blob(this._chunks, { type: this._mediaRecorder.mimeType });
+-          this._stream.getTracks().forEach((track) => track.stop());
+-          this._callStream?.getTracks().forEach((track) => track.stop());
+-          this._audioContext?.close();
+-          resolve(blob);
+-        },
+-        { once: true }
+-      );
++      this._mediaRecorder.addEventListener('stop', finalize, { once: true });
+       this._mediaRecorder.stop();
+     });
+   }
+@@ -182,6 +198,19 @@ export class MeetingRecorder extends EventTarget {
+     return this._mediaRecorder?.state || 'inactive';
+   }
+ 
++  /** True while the microphone track is live and unmuted -- nach einer
++   *  iOS-Suspendierung ist der Track typischerweise gemutet oder beendet,
++   *  obwohl das Recorder-Objekt weiter existiert. */
++  get micLive() {
++    const track = this._stream?.getAudioTracks()[0];
++    return Boolean(track && track.readyState === 'live' && !track.muted);
++  }
++
++  /** True once at least one chunk was captured (salvage lohnt sich). */
++  get hasAudio() {
++    return this._chunks.length > 0;
++  }
++
+   /** Formats in order of preference; Safari only offers mp4, so a
+    *  webm-only list made recording impossible on iPhones and iPads. */
+   static supportedMimeType() {
+-- 
+2.43.0
+

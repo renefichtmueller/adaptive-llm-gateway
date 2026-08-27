@@ -1,0 +1,384 @@
+From 42146894c21045528ff21a18f47ff04bad2fe244 Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Thu, 27 Aug 2026 06:00:53 +0000
+Subject: [PATCH 03/11] feat(pwa): persist meeting chunks locally and offer
+ recovery
+
+Die Meeting-Aufnahme lebte bislang ausschliesslich im RAM des Tabs; wurde
+die Seite von iOS verworfen (laengere Sperre, Speicherdruck) oder stuerzte
+der Browser ab, war das komplette Meeting unwiederbringlich verloren.
+
+Jeder 2-Sekunden-Chunk wird jetzt sofort in einen IndexedDB-Tresor
+geschrieben (chunk-vault.js) und erst geloescht, wenn der Server die
+Aufnahme verarbeitet hat oder sie ausdruecklich verworfen wird. Beim
+Start prueft die App den Tresor und bietet eine unterbrochene Aufnahme
+mit Zeitpunkt und Laenge zur Verarbeitung an: Server-Capture wird bei
+Bedarf gestoppt, dann laeuft der normale Diarisierungs-Upload; ist das
+Meeting serverseitig verschwunden, wird ohne meeting_id transkribiert,
+damit das Audio nie haengen bleibt.
+---
+ web/public/index.html        |   8 ++
+ web/public/js/app.js         | 123 ++++++++++++++++++++++++++++++
+ web/public/js/chunk-vault.js | 141 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 272 insertions(+)
+ create mode 100644 web/public/js/chunk-vault.js
+
+diff --git a/web/public/index.html b/web/public/index.html
+index 3bb9eda..bb4821d 100644
+--- a/web/public/index.html
++++ b/web/public/index.html
+@@ -244,6 +244,7 @@
+     font-size: 14px;
+   }
+   .update-banner .btn { margin-left: auto; }
++  .update-banner .btn + .btn { margin-left: 8px; }
+ 
+   /* Tabs replace endless scrolling where the three columns do not fit.
+      Hidden on wide screens: there the panels sit side by side already. */
+@@ -1231,6 +1232,13 @@
+     <button class="btn primary" id="update-banner-btn" type="button">Jetzt aktualisieren</button>
+   </div>
+ 
++  <div class="update-banner" id="recovery-banner" hidden>
++    <strong>Unterbrochene Aufnahme gefunden.</strong>
++    <span id="recovery-banner-detail"></span>
++    <button class="btn" id="recovery-discard-btn" type="button">Verwerfen</button>
++    <button class="btn primary" id="recovery-upload-btn" type="button">Jetzt verarbeiten</button>
++  </div>
++
+   <div class="auth-banner" id="auth-banner" hidden>
+     <strong>Nicht angemeldet.</strong>
+     <span>Aufnahme, Consent Lobby und Einstellungen brauchen eine VoiceHub-Sitzung.</span>
+diff --git a/web/public/js/app.js b/web/public/js/app.js
+index 39b195f..fd6d324 100644
+--- a/web/public/js/app.js
++++ b/web/public/js/app.js
+@@ -1,6 +1,7 @@
+ import { AudioCapture } from './audio-capture.js';
+ import { DictationSession } from './dictation-session.js';
+ import { MeetingRecorder, uploadAndDiarize } from './meeting-recorder.js?v25';
++import { chunkVault } from './chunk-vault.js?v25';
+ 
+ const body = document.body;
+ const transcriptEl = document.getElementById('transcript');
+@@ -26,6 +27,10 @@ const updateBanner = document.getElementById('update-banner');
+ const viewTabs = Array.from(document.querySelectorAll('.view-tab'));
+ const VIEW_STORAGE_KEY = 'voicehub.active-view';
+ const updateBannerBtn = document.getElementById('update-banner-btn');
++const recoveryBanner = document.getElementById('recovery-banner');
++const recoveryBannerDetail = document.getElementById('recovery-banner-detail');
++const recoveryUploadBtn = document.getElementById('recovery-upload-btn');
++const recoveryDiscardBtn = document.getElementById('recovery-discard-btn');
+ const microphoneInput = document.getElementById('microphone-input');
+ const MICROPHONE_STORAGE_KEY = 'voicehub.microphone-device-id';
+ const identityLogoutBtn = document.getElementById('identity-logout');
+@@ -1078,6 +1083,10 @@ async function startMeetingRecording() {
+     const meetingId = currentMeetingId;
+     const captureId = currentMeeting?.capture_id;
+     if (!meetingId || !captureId) return;
++    // Zuerst auf Platte (IndexedDB), dann ins Netz: stirbt der Tab durch
++    // Sperre, Absturz oder Speicherdruck, ist das Audio bis zur letzten
++    // 2-Sekunden-Scheibe wiederherstellbar.
++    chunkVault.append(captureId, event.detail.sequence, event.detail.blob).catch(() => {});
+     speakerMonitorQueue = speakerMonitorQueue
+       .then(async () => {
+         if (recorder.state !== 'recording') return;
+@@ -1121,6 +1130,16 @@ async function startMeetingRecording() {
+     recordingIndicator.textContent = 'Freigabe wird erneut geprüft · Aufnahme noch aus';
+     currentMeeting = await apiJson(`/meetings/${currentMeetingId}/capture/start`, { method: 'POST' });
+     renderMeetingReview();
++    if (currentMeeting.capture_id) {
++      chunkVault.begin({
++        captureId: currentMeeting.capture_id,
++        meetingId: currentMeetingId,
++        mimeType: MeetingRecorder.supportedMimeType() || '',
++        fileExtension: recorder.fileExtension,
++        expectedSpeakers: parseParticipants(participantsInput.value).length || null,
++        meetingTitle: currentMeeting.title || '',
++      }).catch(() => {});
++    }
+     recorder.start();
+   } catch (err) {
+     if (currentMeeting?.capture_state === 'recording') {
+@@ -1183,6 +1202,7 @@ async function stopMeetingRecording() {
+       fileExtension,
+       expectedSpeakers,
+       meetingId: currentMeetingId,
++      captureId: currentMeeting?.capture_id || null,
+     };
+     await processPendingMeetingUpload();
+   } catch (err) {
+@@ -1208,6 +1228,8 @@ async function processPendingMeetingUpload() {
+     finalText = anonymousMeetingText;
+     currentMeeting = await apiJson(`/meetings/${upload.meetingId}`);
+     pendingMeetingUpload = null;
++    // Server hat das Audio verarbeitet -- die lokale Sicherung darf weg.
++    if (upload.captureId) chunkVault.discard(upload.captureId).catch(() => {});
+     renderTranscript(finalText ? [{ text: finalText }] : [], '');
+     renderSpeakerReview(job.speaker_labels || []);
+     finishReview();
+@@ -1321,6 +1343,8 @@ function discard() {
+   session = null;
+   meetingRecorder?.release();
+   meetingRecorder = null;
++  // Ausdrueckliches Verwerfen raeumt auch die lokale Sicherung auf.
++  if (currentMeeting?.capture_id) chunkVault.discard(currentMeeting.capture_id).catch(() => {});
+   finalText = '';
+   modeSelect.value = '';
+   resetMeetingConsent();
+@@ -2748,6 +2772,105 @@ document.addEventListener('visibilitychange', () => {
+ });
+ void checkForNewVersion();
+ 
++/// Wiederherstellung unterbrochener Aufnahmen: Liegt im IndexedDB-Tresor
++/// noch Audio einer Capture, die nie fertig hochgeladen wurde (Sperre,
++/// Absturz, geschlossener Tab), wird sie hier zur Verarbeitung angeboten
++/// statt still verloren zu gehen.
++let recoveryCapture = null;
++
++async function offerCaptureRecovery() {
++  // Ein stale ausgeliefertes index.html (CDN-Falle vom 23.08.) kennt das
++  // Banner noch nicht -- dann lieber still bleiben als hier zu werfen.
++  if (!recoveryBanner || !recoveryBannerDetail || !recoveryUploadBtn || !recoveryDiscardBtn) return;
++  let open = [];
++  try {
++    open = await chunkVault.listOpen();
++  } catch {
++    return; // Kein IndexedDB (privater Modus o.ae.) -- dann gibt es auch keinen Tresor.
++  }
++  const candidates = open.filter((capture) => capture.captureId !== currentMeeting?.capture_id);
++  if (!candidates.length) {
++    setVisible(recoveryBanner, false);
++    return;
++  }
++  candidates.sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
++  recoveryCapture = candidates[0];
++  const startedAt = recoveryCapture.startedAt
++    ? new Date(recoveryCapture.startedAt).toLocaleString('de-DE')
++    : 'unbekanntem Zeitpunkt';
++  const minutes = Math.max(1, Math.round((recoveryCapture.chunkCount * 2) / 60));
++  recoveryBannerDetail.textContent =
++    `${recoveryCapture.meetingTitle ? `„${recoveryCapture.meetingTitle}“ ` : ''}vom ${startedAt} · ca. ${minutes} min Audio warten auf Verarbeitung.`;
++  setVisible(recoveryBanner, true);
++}
++
++async function recoverInterruptedCapture() {
++  if (!recoveryCapture || !requireServerAvailable()) return;
++  recoveryUploadBtn.disabled = true;
++  recoveryDiscardBtn.disabled = true;
++  try {
++    const assembled = await chunkVault.assemble(recoveryCapture.captureId);
++    if (!assembled || !assembled.blob.size) {
++      await chunkVault.discard(recoveryCapture.captureId);
++      recoveryCapture = null;
++      setVisible(recoveryBanner, false);
++      return;
++    }
++    const { meta, blob } = assembled;
++    // Meeting-Uploads verlangen eine gestoppte Capture -- den Serverstand
++    // vorher abgleichen. Ein verschwundenes Meeting blockiert nicht: dann
++    // wird ohne meeting_id transkribiert, damit das Audio nie haengt.
++    let meetingId = meta.meetingId || null;
++    if (meetingId) {
++      try {
++        let meeting = await apiJson(`/meetings/${meetingId}`);
++        if (meeting.capture_state === 'recording' || meeting.capture_state === 'paused') {
++          meeting = await apiJson(`/meetings/${meetingId}/capture/stop`, { method: 'POST' });
++        }
++        currentMeetingId = meetingId;
++        currentMeeting = meeting;
++      } catch {
++        meetingId = null;
++      }
++    }
++    setVisible(recoveryBanner, false);
++    setState('finishing');
++    showHint('Wiederhergestellte Aufnahme wird transkribiert und nach Sprechern getrennt…', false);
++    const job = await uploadAndDiarize(blob, meta.fileExtension || 'webm', meta.expectedSpeakers || undefined, meetingId);
++    await chunkVault.discard(recoveryCapture.captureId);
++    recoveryCapture = null;
++    anonymousMeetingText = job.text || '';
++    finalText = anonymousMeetingText;
++    renderTranscript(finalText ? [{ text: finalText }] : [], '');
++    renderSpeakerReview(job.speaker_labels || []);
++    if (meetingId) renderMeetingReview();
++    setState('reviewing');
++    showToast('Wiederhergestellte Aufnahme verarbeitet.');
++    showView('transcript');
++  } catch (err) {
++    recoveryUploadBtn.disabled = false;
++    recoveryDiscardBtn.disabled = false;
++    setVisible(recoveryBanner, true);
++    showHint('Wiederherstellung fehlgeschlagen; das Audio bleibt lokal erhalten. ' + (err?.message || ''), true);
++    setState('idle');
++  }
++}
++
++recoveryUploadBtn?.addEventListener('click', () => { void recoverInterruptedCapture(); });
++recoveryDiscardBtn?.addEventListener('click', () => {
++  if (!recoveryCapture) return;
++  if (!window.confirm('Unterbrochene Aufnahme endgültig verwerfen? Das Audio ist danach weg.')) return;
++  chunkVault.discard(recoveryCapture.captureId)
++    .then(() => {
++      recoveryCapture = null;
++      setVisible(recoveryBanner, false);
++      showToast('Aufnahme verworfen.');
++    })
++    .catch(() => showToast('Verwerfen fehlgeschlagen.'));
++});
++
++void offerCaptureRecovery();
++
+ async function saveSettingsFromForm() {
+   if (!requireServerAvailable()) return;
+   const { result: replacements, skipped } = parseReplacements(replacementsInput.value);
+diff --git a/web/public/js/chunk-vault.js b/web/public/js/chunk-vault.js
+new file mode 100644
+index 0000000..63545a0
+--- /dev/null
++++ b/web/public/js/chunk-vault.js
+@@ -0,0 +1,141 @@
++/**
++ * Lokale Absicherung der Meeting-Aufnahme (IndexedDB): Jeder MediaRecorder-
++ * Chunk wird sofort nach dem Eintreffen persistiert. Stirbt der Tab --
++ * iOS-Sperre, Absturz, Speicherdruck, versehentliches Schliessen -- bleibt
++ * das Audio erhalten und wird beim naechsten Start zur Verarbeitung
++ * angeboten. Kein Ersatz fuer den Server: nur die Versicherung, dass der
++ * Weg dorthin nie das einzige Exemplar transportiert.
++ */
++const DB_NAME = 'voicehub-capture-vault';
++const DB_VERSION = 1;
++const CAPTURES = 'captures';
++const CHUNKS = 'chunks';
++
++function openDb() {
++  return new Promise((resolve, reject) => {
++    const request = indexedDB.open(DB_NAME, DB_VERSION);
++    request.onupgradeneeded = () => {
++      const db = request.result;
++      if (!db.objectStoreNames.contains(CAPTURES)) {
++        db.createObjectStore(CAPTURES, { keyPath: 'captureId' });
++      }
++      if (!db.objectStoreNames.contains(CHUNKS)) {
++        const store = db.createObjectStore(CHUNKS, { keyPath: ['captureId', 'sequence'] });
++        store.createIndex('byCapture', 'captureId');
++      }
++    };
++    request.onsuccess = () => resolve(request.result);
++    request.onerror = () => reject(request.error || new Error('IndexedDB nicht verfügbar'));
++  });
++}
++
++// Resolved erst mit oncomplete der Transaktion, damit Schreibzugriffe
++// wirklich persistiert sind, bevor der Aufrufer weitermacht.
++async function withTransaction(storeNames, mode, fn) {
++  const db = await openDb();
++  try {
++    return await new Promise((resolve, reject) => {
++      const tx = db.transaction(storeNames, mode);
++      let result;
++      try {
++        result = fn(tx);
++      } catch (err) {
++        reject(err);
++        return;
++      }
++      tx.oncomplete = () => resolve(result);
++      tx.onabort = () => reject(tx.error || new Error('IndexedDB-Transaktion abgebrochen'));
++      tx.onerror = () => reject(tx.error || new Error('IndexedDB-Transaktion fehlgeschlagen'));
++    });
++  } finally {
++    db.close();
++  }
++}
++
++function requestValue(request) {
++  return new Promise((resolve, reject) => {
++    request.onsuccess = () => resolve(request.result);
++    request.onerror = () => reject(request.error);
++  });
++}
++
++export const chunkVault = {
++  /** Meldet eine neue Capture an. Die Metadaten reichen fuer die spaetere
++   *  Wiederherstellung: Upload braucht meetingId, Dateiendung und die
++   *  erwartete Sprecheranzahl. */
++  async begin({ captureId, meetingId, mimeType, fileExtension, expectedSpeakers, meetingTitle }) {
++    await withTransaction([CAPTURES], 'readwrite', (tx) => {
++      tx.objectStore(CAPTURES).put({
++        captureId,
++        meetingId,
++        mimeType: mimeType || '',
++        fileExtension: fileExtension || 'webm',
++        expectedSpeakers: expectedSpeakers || null,
++        meetingTitle: meetingTitle || '',
++        startedAt: new Date().toISOString(),
++      });
++    });
++  },
++
++  async append(captureId, sequence, blob) {
++    await withTransaction([CHUNKS], 'readwrite', (tx) => {
++      tx.objectStore(CHUNKS).put({ captureId, sequence, blob });
++    });
++  },
++
++  /** Alle Captures, fuer die noch Audio im Tresor liegt; Eintraege ohne
++   *  Chunks werden dabei gleich aufgeraeumt. */
++  async listOpen() {
++    const db = await openDb();
++    let captures = [];
++    try {
++      captures = (await requestValue(db.transaction(CAPTURES).objectStore(CAPTURES).getAll())) || [];
++      const withAudio = [];
++      for (const capture of captures) {
++        const keys = await requestValue(
++          db.transaction(CHUNKS).objectStore(CHUNKS).index('byCapture').getAllKeys(capture.captureId),
++        );
++        if (keys && keys.length > 0) {
++          withAudio.push({ ...capture, chunkCount: keys.length });
++        }
++      }
++      return withAudio;
++    } finally {
++      db.close();
++    }
++  },
++
++  /** Setzt die Chunks einer Capture in Sequenz-Reihenfolge zu einem Blob
++   *  zusammen -- exakt so, wie es der normale Stopp-Pfad auch tut. */
++  async assemble(captureId) {
++    const db = await openDb();
++    try {
++      const meta = await requestValue(db.transaction(CAPTURES).objectStore(CAPTURES).get(captureId));
++      const rows = (await requestValue(
++        db.transaction(CHUNKS).objectStore(CHUNKS).index('byCapture').getAll(captureId),
++      )) || [];
++      if (!meta || rows.length === 0) return null;
++      rows.sort((a, b) => a.sequence - b.sequence);
++      return {
++        meta,
++        blob: new Blob(rows.map((row) => row.blob), { type: meta.mimeType || rows[0].blob.type }),
++      };
++    } finally {
++      db.close();
++    }
++  },
++
++  async discard(captureId) {
++    await withTransaction([CAPTURES, CHUNKS], 'readwrite', (tx) => {
++      tx.objectStore(CAPTURES).delete(captureId);
++      const chunkStore = tx.objectStore(CHUNKS);
++      const cursorRequest = chunkStore.index('byCapture').openKeyCursor(IDBKeyRange.only(captureId));
++      cursorRequest.onsuccess = () => {
++        const cursor = cursorRequest.result;
++        if (!cursor) return;
++        chunkStore.delete(cursor.primaryKey);
++        cursor.continue();
++      };
++    });
++  },
++};
+-- 
+2.43.0
+

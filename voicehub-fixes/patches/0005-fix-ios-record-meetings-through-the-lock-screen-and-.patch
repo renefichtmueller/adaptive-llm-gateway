@@ -1,0 +1,394 @@
+From a7c79717a0ea5c5ad217f7ae3d11f17ff1422520 Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Thu, 27 Aug 2026 06:04:02 +0000
+Subject: [PATCH 05/11] fix(ios): record meetings through the lock screen and
+ stop losing audio
+
+Die Meeting-Aufnahme der iPhone-App starb bei Bildschirmsperre genauso wie
+die PWA: es fehlte der Background-Mode audio, und die Session-Ereignisse
+von iOS wurden ignoriert. Dazu loeschte der Upload-Callback die Audiodatei
+auch im Fehlerfall -- ein fehlgeschlagener Upload vernichtete das einzige
+Exemplar des Meetings.
+
+- UIBackgroundModes audio (project.yml + Info.plist): Aufnahme laeuft bei
+  Sperre und im Hintergrund weiter, wie bei Apples Sprachmemos.
+- AVAudioSession .playAndRecord/.measurement mit Interruption-, Route-
+  Change- und Media-Services-Reset-Handling: Anruf/Siri pausieren und
+  setzen automatisch fort, AirPods-Trennung wechselt nahtlos aufs
+  eingebaute Mikrofon, alles mit sichtbarem Hinweis.
+- Aufnahme liegt in Documents/Aufnahmen (Dateien-App) statt tmp/ und wird
+  erst nach erfolgreicher Verarbeitung geloescht; im Fehlerfall nennt der
+  Hinweis den Dateinamen.
+- Upload baut den Multipart-Body als Datei und sendet per
+  uploadTask(fromFile:) -- ein einstuendiges Meeting (~115 MB WAV) landet
+  nicht mehr komplett im RAM.
+---
+ ios/VoiceHub/DictationViewModel.swift   |  16 ++-
+ ios/VoiceHub/Info.plist                 |   4 +
+ ios/VoiceHub/JobUploadClient.swift      |  59 ++++++----
+ ios/VoiceHub/MeetingAudioRecorder.swift | 141 ++++++++++++++++++++++--
+ ios/project.yml                         |   6 +
+ 5 files changed, 191 insertions(+), 35 deletions(-)
+
+diff --git a/ios/VoiceHub/DictationViewModel.swift b/ios/VoiceHub/DictationViewModel.swift
+index 4e2bda6..5a87d81 100644
+--- a/ios/VoiceHub/DictationViewModel.swift
++++ b/ios/VoiceHub/DictationViewModel.swift
+@@ -370,11 +370,17 @@ final class DictationViewModel: ObservableObject {
+         resetTranscriptState()
+ 
+         let recorder = MeetingAudioRecorder()
++        recorder.onStatus = { [weak self] message in
++            DispatchQueue.main.async {
++                guard let self, self.state == .recording else { return }
++                self.hint = message
++            }
++        }
+         do {
+             try recorder.start()
+             meetingRecorder = recorder
+             state = .recording
+-            hint = "Aufnahme läuft -- Sprechertrennung passiert nach dem Stopp."
++            hint = "Aufnahme läuft -- auch bei gesperrtem Display. Sprechertrennung folgt nach dem Stopp."
+             startLevelTimer()
+         } catch {
+             hint = "Mikrofon nicht verfügbar: \(error.localizedDescription)"
+@@ -406,18 +412,22 @@ final class DictationViewModel: ObservableObject {
+             baseURL: backendURL,
+             expectedSpeakers: expectedSpeakers > 0 ? expectedSpeakers : nil
+         ) { [weak self] result in
+-            try? FileManager.default.removeItem(at: fileURL)
+             DispatchQueue.main.async {
+                 guard let self else { return }
+                 switch result {
+                 case .success(let job):
++                    // Erst nach erfolgreicher Verarbeitung darf das lokale
++                    // Audio weg -- bei einem Fehler ist die Datei in der
++                    // Dateien-App das einzige verbliebene Exemplar des
++                    // Meetings und muss erhalten bleiben.
++                    try? FileManager.default.removeItem(at: fileURL)
+                     if job.diarizationError != nil {
+                         self.toastMessage = "Sprechertrennung nicht möglich -- Rohtranskript gespeichert."
+                     }
+                     self.finalText = job.text ?? ""
+                     self.finishReview()
+                 case .failure(let error):
+-                    self.hint = "Verarbeitung fehlgeschlagen: \(error.localizedDescription)"
++                    self.hint = "Verarbeitung fehlgeschlagen: \(error.localizedDescription) Audio gesichert unter Aufnahmen/\(fileURL.lastPathComponent) (Dateien-App)."
+                     self.hintIsError = true
+                     self.state = .idle
+                 }
+diff --git a/ios/VoiceHub/Info.plist b/ios/VoiceHub/Info.plist
+index ea0dc27..7701109 100644
+--- a/ios/VoiceHub/Info.plist
++++ b/ios/VoiceHub/Info.plist
+@@ -35,6 +35,10 @@
+ 		<string>Inter-Bold.ttf</string>
+ 		<string>Inter-Italic.ttf</string>
+ 	</array>
++	<key>UIBackgroundModes</key>
++	<array>
++		<string>audio</string>
++	</array>
+ 	<key>UIFileSharingEnabled</key>
+ 	<true/>
+ 	<key>UILaunchScreen</key>
+diff --git a/ios/VoiceHub/JobUploadClient.swift b/ios/VoiceHub/JobUploadClient.swift
+index 8ebfed8..0d0ea07 100644
+--- a/ios/VoiceHub/JobUploadClient.swift
++++ b/ios/VoiceHub/JobUploadClient.swift
+@@ -47,21 +47,27 @@ enum JobUploadClient {
+         expectedSpeakers: Int?,
+         completion: @escaping (Result<JobResult, Error>) -> Void
+     ) {
+-        guard let audioData = try? Data(contentsOf: fileURL) else {
+-            completion(.failure(JobUploadError.invalidResponse))
+-            return
+-        }
+-
+         let boundary = "voicehub-\(UUID().uuidString)"
+         var request = URLRequest(url: baseURL.appendingPathComponent("jobs/transcribe"))
+         request.httpMethod = "POST"
+         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+-        request.httpBody = multipartBody(boundary: boundary, audioData: audioData, expectedSpeakers: expectedSpeakers)
+         // A multi-minute meeting upload plus server-side transcription can
+         // legitimately take a while -- the default 60s would abort it.
+         request.timeoutInterval = 180
+ 
+-        URLSession.shared.dataTask(with: request) { data, response, error in
++        // Der Multipart-Body wird als Datei zusammengesetzt und per
++        // uploadTask(fromFile:) gesendet: ein einstuendiges Meeting
++        // (~115 MB WAV) darf nicht als Ganzes in den RAM geladen werden.
++        let bodyURL: URL
++        do {
++            bodyURL = try multipartBodyFile(boundary: boundary, audioURL: fileURL, expectedSpeakers: expectedSpeakers)
++        } catch {
++            completion(.failure(error))
++            return
++        }
++
++        URLSession.shared.uploadTask(with: request, fromFile: bodyURL) { data, response, error in
++            try? FileManager.default.removeItem(at: bodyURL)
+             if let error {
+                 completion(.failure(error))
+                 return
+@@ -76,25 +82,36 @@ enum JobUploadClient {
+         }.resume()
+     }
+ 
+-    private static func multipartBody(boundary: String, audioData: Data, expectedSpeakers: Int?) -> Data {
+-        var body = Data()
++    private static func multipartBodyFile(boundary: String, audioURL: URL, expectedSpeakers: Int?) throws -> URL {
++        let bodyURL = FileManager.default.temporaryDirectory
++            .appendingPathComponent("voicehub-upload-\(UUID().uuidString).multipart")
++        FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
++        let body = try FileHandle(forWritingTo: bodyURL)
++        defer { try? body.close() }
+ 
+-        func appendField(name: String, value: String) {
+-            body.append(contentsOf: "--\(boundary)\r\n".utf8)
+-            body.append(contentsOf: "Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".utf8)
+-            body.append(contentsOf: "\(value)\r\n".utf8)
++        func write(_ string: String) { body.write(Data(string.utf8)) }
++        func writeField(name: String, value: String) {
++            write("--\(boundary)\r\n")
++            write("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
++            write("\(value)\r\n")
+         }
+ 
+-        appendField(name: "diarize", value: "true")
++        writeField(name: "diarize", value: "true")
+         if let expectedSpeakers, expectedSpeakers > 0 {
+-            appendField(name: "expected_speakers", value: String(expectedSpeakers))
++            writeField(name: "expected_speakers", value: String(expectedSpeakers))
++        }
++        write("--\(boundary)\r\n")
++        write("Content-Disposition: form-data; name=\"file\"; filename=\"meeting.wav\"\r\n")
++        write("Content-Type: audio/wav\r\n\r\n")
++        let audio = try FileHandle(forReadingFrom: audioURL)
++        defer { try? audio.close() }
++        while true {
++            let chunk = audio.readData(ofLength: 1 << 20)
++            if chunk.isEmpty { break }
++            body.write(chunk)
+         }
+-        body.append(contentsOf: "--\(boundary)\r\n".utf8)
+-        body.append(contentsOf: "Content-Disposition: form-data; name=\"file\"; filename=\"meeting.wav\"\r\n".utf8)
+-        body.append(contentsOf: "Content-Type: audio/wav\r\n\r\n".utf8)
+-        body.append(audioData)
+-        body.append(contentsOf: "\r\n--\(boundary)--\r\n".utf8)
+-        return body
++        write("\r\n--\(boundary)--\r\n")
++        return bodyURL
+     }
+ 
+     private static func poll(jobId: String, baseURL: URL, completion: @escaping (Result<JobResult, Error>) -> Void) {
+diff --git a/ios/VoiceHub/MeetingAudioRecorder.swift b/ios/VoiceHub/MeetingAudioRecorder.swift
+index d817da7..59cad15 100644
+--- a/ios/VoiceHub/MeetingAudioRecorder.swift
++++ b/ios/VoiceHub/MeetingAudioRecorder.swift
+@@ -8,24 +8,71 @@ import AVFoundation
+ /// Resamples to the same 16kHz mono format AudioCapture streams live audio
+ /// in (same AVAudioConverter pattern), both for a small upload size and one
+ /// consistent target format across the app.
++///
++/// Robustheit: Die Aufnahme uebersteht Bildschirmsperre und Hintergrund
++/// (Background-Mode "audio" in project.yml plus aktive .playAndRecord-
++/// Session), erkennt Unterbrechungen (Anruf, Siri, Wecker) und Routen-
++/// wechsel (AirPods weg) und schreibt in Documents/Aufnahmen -- sichtbar in
++/// der Dateien-App, damit ein fehlgeschlagener Upload nie das einzige
++/// Exemplar des Meetings verliert (Datenverlust-Befund vom 23.08.).
+ final class MeetingAudioRecorder {
+-    private let engine = AVAudioEngine()
++    private var engine = AVAudioEngine()
+     private var converter: AVAudioConverter?
+     private var audioFile: AVAudioFile?
+     private let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true)!
+     private var currentLevel: Float = 0
+     private(set) var fileURL: URL?
++    private var observers: [NSObjectProtocol] = []
++
++    /// Sichtbarer Zustand fuer die UI (Unterbrechung, Fortsetzung,
++    /// Mikrofonwechsel). Wird auf der Main-Queue gerufen.
++    var onStatus: ((String) -> Void)?
+ 
+     func start() throws {
+         #if os(iOS)
+         let audioSession = AVAudioSession.sharedInstance()
+-        try audioSession.setCategory(.record, mode: .measurement)
++        // .playAndRecord + UIBackgroundModes "audio" halten die Aufnahme
++        // auch bei gesperrtem Display am Leben (wie Apples Sprachmemos);
++        // .measurement laesst das iOS-Voice-Processing aus -- besser fuer
++        // Raum-Mikrofonie und die DGX-ASR.
++        try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.allowBluetooth, .defaultToSpeaker])
+         try audioSession.setActive(true)
+         #endif
++        installObservers()
++
++        let url = Self.recordingsDirectory().appendingPathComponent(Self.recordingName())
++        let file = try AVAudioFile(forWriting: url, settings: targetFormat.settings)
++        audioFile = file
++        fileURL = url
++
++        try attachTap()
++    }
+ 
++    /// Documents/Aufnahmen: sichtbar in der Dateien-App -- dieselbe
++    /// Rettungslogik wie beim On-Device-Pfad. tmp/ kann iOS jederzeit
++    /// leeren; eine Meeting-Aufnahme darf dort nicht liegen.
++    private static func recordingsDirectory() -> URL {
++        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
++        let directory = documents.appendingPathComponent("Aufnahmen", isDirectory: true)
++        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
++        return directory
++    }
++
++    private static func recordingName() -> String {
++        let formatter = DateFormatter()
++        formatter.locale = Locale(identifier: "en_US_POSIX")
++        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
++        return "voicehub-meeting-\(formatter.string(from: Date())).wav"
++    }
++
++    /// (Re-)installs the input tap. Das Eingabeformat kann sich mit der
++    /// Route aendern (AirPods getrennt -> eingebautes Mikrofon); dann
++    /// braucht es einen frischen Converter und Tap auf demselben File.
++    private func attachTap() throws {
+         let input = engine.inputNode
++        input.removeTap(onBus: 0)
+         let inputFormat = input.outputFormat(forBus: 0)
+-        guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
++        guard inputFormat.sampleRate > 0, let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
+             throw NSError(
+                 domain: "MeetingAudioRecorder", code: 1,
+                 userInfo: [NSLocalizedDescriptionKey: "Resampler konnte nicht erstellt werden"]
+@@ -33,12 +80,6 @@ final class MeetingAudioRecorder {
+         }
+         self.converter = converter
+ 
+-        let url = FileManager.default.temporaryDirectory
+-            .appendingPathComponent("voicehub-meeting-\(UUID().uuidString).wav")
+-        let file = try AVAudioFile(forWriting: url, settings: targetFormat.settings)
+-        audioFile = file
+-        fileURL = url
+-
+         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
+             self?.process(buffer: buffer)
+         }
+@@ -46,6 +87,82 @@ final class MeetingAudioRecorder {
+         try engine.start()
+     }
+ 
++    private func installObservers() {
++        #if os(iOS)
++        let center = NotificationCenter.default
++        observers.append(center.addObserver(
++            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
++        ) { [weak self] notification in
++            self?.handleInterruption(notification)
++        })
++        observers.append(center.addObserver(
++            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
++        ) { [weak self] notification in
++            self?.handleRouteChange(notification)
++        })
++        observers.append(center.addObserver(
++            forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main
++        ) { [weak self] _ in
++            self?.restartAfterSystemReset()
++        })
++        #endif
++    }
++
++    #if os(iOS)
++    /// Anruf, Siri oder Wecker nehmen jeder App das Mikrofon. Die Datei
++    /// bleibt offen; nach dem Ende der Unterbrechung wird an derselben Datei
++    /// weitergeschrieben -- die Luecke ist hoerbar, aber nichts ist verloren.
++    private func handleInterruption(_ notification: Notification) {
++        guard audioFile != nil,
++              let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
++              let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
++        switch type {
++        case .began:
++            engine.pause()
++            onStatus?("Aufnahme unterbrochen (Anruf/Siri) – wird automatisch fortgesetzt.")
++        case .ended:
++            do {
++                try AVAudioSession.sharedInstance().setActive(true)
++                try attachTap()
++                onStatus?("Aufnahme läuft weiter.")
++            } catch {
++                onStatus?("Aufnahme konnte nicht fortgesetzt werden – bisheriges Audio ist gesichert.")
++            }
++        @unknown default:
++            break
++        }
++    }
++
++    private func handleRouteChange(_ notification: Notification) {
++        guard audioFile != nil,
++              let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
++              let reason = AVAudioSession.RouteChangeReason(rawValue: raw),
++              reason == .oldDeviceUnavailable || reason == .newDeviceAvailable else { return }
++        do {
++            try attachTap()
++            if reason == .oldDeviceUnavailable {
++                onStatus?("Mikrofon gewechselt (z. B. AirPods getrennt) – Aufnahme läuft weiter.")
++            }
++        } catch {
++            onStatus?("Mikrofonwechsel fehlgeschlagen – bisheriges Audio ist gesichert.")
++        }
++    }
++
++    /// Kompletter Neuaufbau nach einem Media-Services-Reset des Systems --
++    /// die alte Engine ist danach unbrauchbar.
++    private func restartAfterSystemReset() {
++        guard audioFile != nil else { return }
++        engine = AVAudioEngine()
++        do {
++            try AVAudioSession.sharedInstance().setActive(true)
++            try attachTap()
++            onStatus?("Audiosystem neu gestartet – Aufnahme läuft weiter.")
++        } catch {
++            onStatus?("Audiosystem-Neustart fehlgeschlagen – bisheriges Audio ist gesichert.")
++        }
++    }
++    #endif
++
+     private func process(buffer: AVAudioPCMBuffer) {
+         updateLevel(from: buffer)
+         guard let converter, let audioFile else { return }
+@@ -70,9 +187,11 @@ final class MeetingAudioRecorder {
+     }
+ 
+     /// Stops capture and returns the recorded file's URL, or nil if nothing
+-    /// was captured. The caller is responsible for deleting the file after
+-    /// upload (see DictationViewModel.stopStudioMeetingRecording).
++    /// was captured. The caller deletes the file only after the upload
++    /// succeeded (see DictationViewModel.stopStudioMeetingRecording).
+     func stop() -> URL? {
++        for observer in observers { NotificationCenter.default.removeObserver(observer) }
++        observers.removeAll()
+         engine.inputNode.removeTap(onBus: 0)
+         engine.stop()
+         audioFile = nil // closing the AVAudioFile flushes and finalizes it
+diff --git a/ios/project.yml b/ios/project.yml
+index 50a3e24..658a63f 100644
+--- a/ios/project.yml
++++ b/ios/project.yml
+@@ -33,6 +33,12 @@ targets:
+       path: VoiceHub/Info.plist
+       properties:
+         CFBundleDisplayName: VoiceHub
++        # Recording must survive the lock screen: the audio background mode
++        # keeps an active AVAudioSession capturing while the phone is locked
++        # or the app is in the background (same mechanism as Voice Memos).
++        # Without it iOS suspends the app on lock and the meeting dies.
++        UIBackgroundModes:
++          - audio
+         # Recordings live in Documents and must be reachable from the Files
+         # app, otherwise a rescued conversation is stuck inside the sandbox.
+         UIFileSharingEnabled: true
+-- 
+2.43.0
+

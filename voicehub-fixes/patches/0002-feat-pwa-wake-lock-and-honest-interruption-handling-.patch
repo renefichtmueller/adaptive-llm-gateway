@@ -1,0 +1,182 @@
+From cba1e17455d94e44dcb32c451c999682ec18511a Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Thu, 27 Aug 2026 05:58:11 +0000
+Subject: [PATCH 02/11] feat(pwa): wake lock and honest interruption handling
+ for recordings
+
+Ein iPhone sperrte sich waehrend einer Meeting-Aufnahme nach dem normalen
+Auto-Lock-Timeout von selbst; iOS suspendierte die PWA und die Aufnahme
+starb kommentarlos (25.08.). Ab jetzt:
+
+- Screen Wake Lock, solange aufgenommen, pausiert oder hochgeladen wird
+  (am setState-Lebenszyklus, mit Re-Acquire nach visibilitychange).
+- Mikrofon-Track-Verlust, Track-Mute und MediaRecorder-Fehler pausieren
+  die Aufnahme fail-closed mit Server-Abgleich (Reason audio_interrupted)
+  und sichtbarem Grund, statt Stille aufzuzeichnen.
+- Rueckkehr aus Sperre/Hintergrund prueft den Recorder-Zustand einmal
+  ehrlich; ein toter Recorder blockiert Fortsetzen mit klarer Ansage --
+  Stopp verarbeitet das bis zur Unterbrechung aufgenommene Audio.
+- Neue Pause-Gruende in formatPauseReason; iOS-Hinweis beim Meeting-Start.
+---
+ web/public/js/app.js | 110 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 110 insertions(+)
+
+diff --git a/web/public/js/app.js b/web/public/js/app.js
+index 8bf0f7f..39b195f 100644
+--- a/web/public/js/app.js
++++ b/web/public/js/app.js
+@@ -162,6 +162,77 @@ let sessionProjectIds = [];
+ const UI_VERSION = 'v25';
+ let voiceprintLifecycleLoadKey = null;
+ 
++const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent)
++  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
++
++// Screen Wake Lock: Ohne ihn sperrt sich ein iPhone nach dem Auto-Lock-
++// Timeout mitten in der Aufnahme selbst; iOS suspendiert die PWA dann
++// vollstaendig und die Aufnahme stirbt (Meeting-Verlust am 25.08.). Der
++// Wake Lock verhindert nur das automatische Sperren -- bewusstes Sperren
++// uebersteht eine Web-App nie, daher zusaetzlich die Unterbrechungs-
++// Erkennung unten.
++let wakeLockSentinel = null;
++let wakeLockWanted = false;
++
++async function acquireWakeLock() {
++  wakeLockWanted = true;
++  if (!('wakeLock' in navigator) || wakeLockSentinel) return;
++  try {
++    wakeLockSentinel = await navigator.wakeLock.request('screen');
++    wakeLockSentinel.addEventListener('release', () => { wakeLockSentinel = null; });
++  } catch {
++    // Energiesparmodus o.ae. -- die Unterbrechungs-Erkennung bleibt als Netz.
++  }
++}
++
++function releaseWakeLock() {
++  wakeLockWanted = false;
++  wakeLockSentinel?.release().catch(() => {});
++  wakeLockSentinel = null;
++}
++
++// Der Wake Lock wird beim Verlassen der Seite vom System freigegeben --
++// nach der Rueckkehr muss er neu angefordert werden, solange noch
++// aufgenommen wird.
++document.addEventListener('visibilitychange', () => {
++  if (!document.hidden && wakeLockWanted) void acquireWakeLock();
++});
++
++// Haelt eine unterbrochene lokale Aufnahme ehrlich an: Mikrofon-Track weg
++// oder gemutet (Sperre, Anruf, App-Wechsel) heisst fail-closed Pause plus
++// Server-Abgleich -- nicht stilles Weiterlaufen ohne Audio.
++async function pauseMeetingForInterruption(reason, message) {
++  if (!meetingRecorder || state !== 'recording') return;
++  meetingRecorder.pause();
++  stopWaveAnimation();
++  setState('paused');
++  showHint(message, true);
++  if (!currentMeetingId) return;
++  try {
++    currentMeeting = await apiJson(`/meetings/${currentMeetingId}/capture/pause`, {
++      method: 'POST',
++      headers: { 'content-type': 'application/json' },
++      body: JSON.stringify({ reason }),
++    });
++    setState('paused');
++  } catch {
++    meetingStatusSyncLost = true;
++  }
++}
++
++// Nach Rueckkehr aus Sperre oder Hintergrund kann iOS den Recorder still
++// beendet oder das Mikrofon stummgeschaltet haben -- der Zustand luegt dann
++// ("recording" ohne Audio). Einmal ehrlich pruefen statt weiterzutaeuschen.
++document.addEventListener('visibilitychange', () => {
++  if (document.hidden || state !== 'recording' || !meetingRecorder) return;
++  if (meetingRecorder.state === 'inactive' || !meetingRecorder.micLive) {
++    void pauseMeetingForInterruption(
++      'audio_interrupted',
++      'Aufnahme wurde durch Sperren oder App-Wechsel unterbrochen – bisheriges Audio bleibt erhalten. „Stopp“ verarbeitet es.',
++    );
++  }
++});
++
+ for (let i = 0; i < WAVE_BAR_COUNT; i++) {
+   const bar = document.createElement('span');
+   waveEl.appendChild(bar);
+@@ -208,6 +279,15 @@ function setState(next) {
+   state = next;
+   body.dataset.state = state;
+ 
++  // Wake Lock am Zustands-Lebenszyklus: aktiv, solange aufgenommen,
++  // pausiert oder hochgeladen wird -- auch der Upload stirbt auf iOS,
++  // wenn sich das Display waehrenddessen sperrt.
++  if (next === 'connecting' || next === 'recording' || next === 'paused' || next === 'finishing') {
++    void acquireWakeLock();
++  } else {
++    releaseWakeLock();
++  }
++
+   const modeSelectVisible = state === 'idle' || state === 'reviewing' || state === 'saving';
+   // Fail-closed only for NEW work: an unhealthy backend blocks starting a
+   // capture, but Stop must always stay usable while recording or paused.
+@@ -469,6 +549,9 @@ function formatPauseReason(reason) {
+     participant_revoked: 'Einwilligung widerrufen',
+     unknown_speaker: 'unbekannte Stimme erkannt',
+     microphone_error: 'Mikrofonfehler',
++    audio_interrupted: 'Aufnahme durch Sperren, Anruf oder App-Wechsel unterbrochen',
++    status_connection_lost: 'Statusprüfung nicht erreichbar',
++    local_resume_failed: 'lokale Aufnahme konnte nicht fortgesetzt werden',
+   };
+   return labels[reason] || reason || 'Prüfung erforderlich';
+ }
+@@ -975,6 +1058,22 @@ async function startMeetingRecording() {
+   recorder.addEventListener('callaudioended', () => {
+     showHint('Tab-Freigabe beendet – ab jetzt wird nur noch das Mikrofon aufgezeichnet.', true);
+   });
++  // Sperre, Anruf oder App-Wechsel beenden bzw. muten den Mikrofon-Track;
++  // der Guard auf meetingRecorder verhindert, dass ein spaetes Event eines
++  // bereits verworfenen Recorders eine neue Aufnahme pausiert.
++  const pauseThisRecorder = (message) => {
++    if (meetingRecorder !== recorder) return;
++    void pauseMeetingForInterruption('audio_interrupted', message);
++  };
++  recorder.addEventListener('micended', () => {
++    pauseThisRecorder('Mikrofon wurde vom System beendet (Sperre, Anruf oder App-Wechsel) – Aufnahme pausiert, bisheriges Audio bleibt erhalten.');
++  });
++  recorder.addEventListener('micmuted', () => {
++    pauseThisRecorder('Mikrofon liefert kein Signal mehr (Sperre oder Unterbrechung) – Aufnahme pausiert, bisheriges Audio bleibt erhalten.');
++  });
++  recorder.addEventListener('recordererror', (event) => {
++    pauseThisRecorder(`Aufnahmefehler – Aufnahme pausiert, bisheriges Audio bleibt erhalten. ${event.detail || ''}`);
++  });
+   recorder.addEventListener('speakerchunk', (event) => {
+     const meetingId = currentMeetingId;
+     const captureId = currentMeeting?.capture_id;
+@@ -1043,6 +1142,9 @@ async function startMeetingRecording() {
+   showHint(recorder.callAudioActive
+     ? 'Aufnahme läuft (Mikrofon + Videocall-Ton) – Sprechertrennung und namentliches Review folgen nach dem Stopp.'
+     : 'Aufnahme läuft – Sprechertrennung und namentliches Review folgen nach dem Stopp.', false);
++  if (IS_IOS) {
++    showToast('Display anlassen: Bei gesperrtem iPhone stoppt iOS die Aufnahme im Browser.');
++  }
+   animateWave();
+   startMeetingMonitor();
+ }
+@@ -1117,6 +1219,14 @@ async function processPendingMeetingUpload() {
+ 
+ async function resumeMeetingRecording() {
+   if (!meetingRecorder || !currentMeetingId) return;
++  // Ein von iOS beendeter Recorder oder ein toter Mikrofon-Track laesst
++  // sich nicht fortsetzen -- ehrlich sagen statt durch das Re-Gate zu
++  // laufen und danach Stille aufzuzeichnen.
++  if (meetingRecorder.state === 'inactive' || !meetingRecorder.micLive) {
++    setState('paused');
++    showHint('Fortsetzen nicht möglich – das Mikrofon wurde vom System beendet. „Stopp“ verarbeitet das bis zur Unterbrechung aufgenommene Audio.', true);
++    return;
++  }
+   setState('connecting');
+   try {
+     currentMeeting = await apiJson(`/meetings/${currentMeetingId}`);
+-- 
+2.43.0
+

@@ -1,0 +1,119 @@
+From 378806a5054c67a13016aa66ec04d939e0e66304 Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Thu, 27 Aug 2026 09:52:29 +0000
+Subject: [PATCH 09/11] docs: adopt the full market-radar backlog as the
+ H2/2026 roadmap
+
+Beschluss vom 27.08: Alle 15 Marktradar-Punkte werden uebernommen bzw.
+adaptiert, inklusive des Bot-Pfads (Vexa-Basis, sichtbarer Bot mit
+Consent-Flow). Vier Releases -- R1 Vorlagen/Recaps/UX-Umbau, R2
+Sprecher-Intelligenz (Gedaechtnis mit Einwilligung + Streaming
+Sortformer + Diktat-Upgrade), R3 Kalender/BBB/Suche/Uebersetzung/MCP,
+R4 Meeting-Bot -- unter dem neuen UX-Grundgesetz: autodidaktisch
+bedienbar fuer Engineering, Buchhaltung und HR, abgenommen per
+Usability-Smoke ohne Einweisung. Bestehende Release-Blocker und
+NO-GO-Regeln bleiben unberuehrt.
+---
+ docs/roadmap-2026-h2.md | 90 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 90 insertions(+)
+ create mode 100644 docs/roadmap-2026-h2.md
+
+diff --git a/docs/roadmap-2026-h2.md b/docs/roadmap-2026-h2.md
+new file mode 100644
+index 0000000..a7edcf5
+--- /dev/null
++++ b/docs/roadmap-2026-h2.md
+@@ -0,0 +1,90 @@
++# VoiceHub Roadmap H2/2026: Marktradar-Uebernahme
++
++Stand: 2026-08-27. Beschluss: Alle 15 Punkte aus dem Marktradar vom
++27.08 werden uebernommen bzw. adaptiert, inklusive des Bot-Pfads.
++Leitidee: maechtig unter der Haube, autodidaktisch bedienbar -- fuer
++Engineering, Buchhaltung und HR gleichermassen. Grundlagen: Marktradar
++(27.08, ~40 Produkte/Projekte), Konzept "VoiceHub Native" (27.08),
++Stabilitaets-Patch-Serie (Sperr-Vorfall 25.08).
++
++Dieser Plan steht unter den bestehenden Release-Blockern (Auth/ACL,
++Datenschutz, NO-GO fuer reale Aufnahmen) und der AGENTS.md-Regel:
++erledigt heisst implementiert plus Beweis.
++
++## UX-Grundgesetz (gilt fuer jedes Feature)
++
++Testfrage pro Release: Kann eine neue Kollegin aus der Buchhaltung ohne
++Erklaerung ein Meeting aufnehmen, pruefen und freigeben?
++
++1. Drei Wege, ein Startschirm: Diktieren / Meeting aufnehmen / Aufnahme
++   verarbeiten. Alles Weitere erscheint, wenn es dran ist.
++2. Assistent statt Formular: Meeting-Anlage als gefuehrter Dialog; die
++   Consent-Lobby heisst fuer Nutzer "Alle einverstanden?" und bleibt
++   technisch unveraendert.
++3. Klartext statt Fachbegriff: kein ALL_READY, kein fail-closed, keine
++   Diarisierung in der Oberflaeche.
++4. Karten statt Prompts: Protokoll-Vorlagen als anklickbare Karten;
++   Rollen-Presets (HR: "Bewerbungsgespraech" mit strengeren
++   Datenschutz-Defaults; Buchhaltung: "Abstimmung/Abschluss";
++   Engineering: "Standup/Review").
++5. Fehler nennen den naechsten Schritt; Audio geht nie verloren
++   (Patch-Serie).
++6. Zwei-Minuten-Onboarding mit Probeaufnahme; Hilfe kontextuell.
++7. Sichere Defaults, sichtbare Wahl (Aufbewahrung, Audio-Loeschung nach
++   Freigabe, Voiceprint ja/nein -- je in einem Satz erklaert).
++
++Abnahme zusaetzlich zu Tests: Usability-Smoke mit drei Personen aus drei
++Bereichen ohne Einweisung, mit synthetischem Meeting.
++
++## R0 (laeuft): Fundament
++
++- Stabilitaets-Patch-Serie (PWA-Sperr-Fixes, Chunk-Tresor, Diktat-
++  Rettung, iOS-Background-Audio, Pi-Dienst).
++- Serverumzug weg von Erik; Cloudflare-Tunnel zieht mit dem Dienst um,
++  VPN nur fuer Betrieb.
++- Native App nach Konzept "VoiceHub Native": OIDC-Login, Meeting-Gate-
++  Paritaet, DGX-only (On-Device-Erkennung entfaellt).
++
++## R1 "Sofort spuerbar" (~2-3 Wochen)
++
++| Vorhaben | Nutzersicht | Leitplanke | Baustein | Aufwand |
++|---|---|---|---|---|
++| UX-Grundgesetz-Umbau | Startschirm mit drei Wegen, Meeting-Wizard, Klartext, Rollen-Presets | Gates unveraendert, nur Sprache/Fuehrung | PWA | M |
++| Protokoll-Vorlagen je Meeting-Typ | Vorlagen-Karten bei der Anlage; strukturiertes Protokoll je Typ | DGX-LLM-Prompts, versioniert im Notes-Git | DGX-LLM | S |
++| Late-Join-Recap | Knopf "Zusammenfassung bis jetzt" waehrend der Aufnahme | nur Teilnehmer, aus laufendem Transkript | DGX-LLM | S |
++| Follow-up-Entwurf | E-Mail-Entwurf als Action-Center-Karte nach Freigabe | immer Entwurf mit Freigabe, nie Auto-Send | Action-Center-Typ | S |
++| Kapitel + Sprungmarken | Protokoll mit Kapiteln, Klick springt ins Audio | Kapitel ins Frontmatter, Timestamps aus Pipeline | WhisperX-artiges Alignment auf DGX | S-M |
++| Pi-Chime + Audio-Loeschpolicy | hoerbarer Ton bei fail-closed Pause; Option "Audio nach Freigabe loeschen" | Limitless-Consent-Mode-Muster; Retention-Modell | Pi-Skript, Settings | S |
++
++## R2 "Sprecher-Intelligenz" (~4-6 Wochen)
++
++| Vorhaben | Nutzersicht | Leitplanke | Baustein | Aufwand |
++|---|---|---|---|---|
++| Sprecher-Gedaechtnis mit Einwilligung | Review schlaegt Namen vor ("Klingt nach Anna -- stimmt das?") | Enrollment nur ueber separate Voiceprint-Einwilligung (Issue #8); Widerruf loescht Embeddings | sherpa-onnx/3D-Speaker-Embeddings auf DGX | M-L |
++| Live-Sprechererkennung | Sprecherlabels live; Unknown-Speaker-Pause schneller und praeziser | ersetzt 2-s-Chunk-Monitor durch Streaming; fail-closed bleibt | NVIDIA Streaming Sortformer (NeMo/Riva) | M |
++| Diktat-Upgrade | Ziel-Karten (E-Mail/Notiz/Aufgabe), gesprochene Korrekturen verstanden, lernendes Woerterbuch | Rewrite nur per DGX-LLM; lernt in custom_vocabulary | Wispr/superwhisper-Muster (VoiceInk nur Referenz, GPL) | M |
++
++## R3 "Vernetzt" (~4-6 Wochen)
++
++| Vorhaben | Nutzersicht | Leitplanke | Baustein | Aufwand |
++|---|---|---|---|---|
++| Kalender-Anbindung | Termin-Hinweis "Meeting vorbereiten?" mit vorbefuellter Lobby | nur Vorbereitung/Erinnerung, nie Auto-Start | CalDAV/Graph read-only | M |
++| BBB-Rueckkanal | Live-Untertitel im Call; Transkript nach Freigabe an der BBB-Aufzeichnung | offizielle APIs (putRecordingTextTrack, Caption-Plugin); nur Freigegebenes | bbb-translation-bot als Blaupause | M |
++| Meine-Meetings-Suche | Suche ueber eigene, auch ungefreigebene Meetings | strikt Teilnehmer-only; Team-RAG bleibt Beo | SQLite-FTS | S-M |
++| Uebersetzung DE/EN/ZH | Knopf "Protokoll uebersetzen" auf freigegebener Note | LibreTranslate self-hosted; erst batch | LibreTranslate | S-M |
++| MCP-Server | fuer Agenten (Beo u. a.), nicht fuer Endnutzer sichtbar | ausschliesslich approved Outbox, ACL-gebunden | MCP ueber Outbox-Vertrag | S-M |
++
++## R4 "Reichweite" (~3-4 Wochen)
++
++| Vorhaben | Nutzersicht | Leitplanke | Baustein | Aufwand |
++|---|---|---|---|---|
++| Meeting-Bot fuer Meet/Teams/Zoom | "VoiceHub einladen": Bot erscheint sichtbar als Teilnehmer, postet Consent-Hinweis in den Call-Chat, nimmt erst nach Lobby-Bestaetigungen auf | kein unsichtbares Mitschneiden; ohne Zustimmung bleibt der Bot stumm und geht; Audio in dieselbe DGX-Pipeline | Vexa (Apache-2.0, self-hosted, air-gap-faehig) | L |
++
++## Reihenfolge-Begruendung
++
++R1 dreht mit kleinem Aufwand die taegliche Wahrnehmung (Vorlagen + UX).
++R2 macht aus dem strengsten Gate (Speaker-Review) das bequemste Feature.
++R3 vernetzt, wenn Kern und Sprecherpfad sitzen. R4 erweitert auf fremde
++Plattformen, sobald das Consent-Modell auch im Bot-Szenario bewiesen
++ist. Aufwaende: S <= 3 Tage, M <= 2 Wochen, L > 2 Wochen (eine Person
++mit LLM-Unterstuetzung).
+-- 
+2.43.0
+

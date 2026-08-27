@@ -1,0 +1,141 @@
+From 133aeb2cf9f6bcc3cc181178b2d29b028a2cdbf9 Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Thu, 27 Aug 2026 10:23:49 +0000
+Subject: [PATCH 10/11] docs: implementation-ready specs for the six R1 slices
+
+Jeder R1-Slice aus docs/roadmap-2026-h2.md als ausfuehrbare Spezifikation:
+Scope, API-Vertrag, UX-Akzeptanz und Schliessbeweis -- Vorlagen-Karten
+(inkl. HR-Datenschutz-Defaults), UX-Grundgesetz-Umbau, Late-Join-Recap,
+Follow-up-Entwurf im Action Center, Kapitel mit Sprungmarken, Pi-Chime
+plus Audio-Loeschpolicy. Clients sprechen weiterhin nie direkt mit DGX;
+der Server bleibt der Zugang zu DGX/Inference (ADR 0005).
+---
+ docs/slices/r1-implementation-specs.md | 116 +++++++++++++++++++++++++
+ 1 file changed, 116 insertions(+)
+ create mode 100644 docs/slices/r1-implementation-specs.md
+
+diff --git a/docs/slices/r1-implementation-specs.md b/docs/slices/r1-implementation-specs.md
+new file mode 100644
+index 0000000..d7e3de4
+--- /dev/null
++++ b/docs/slices/r1-implementation-specs.md
+@@ -0,0 +1,116 @@
++# R1-Slices: Implementierungsfertige Spezifikationen
++
++Stand: 2026-08-27. Gehoert zu `docs/roadmap-2026-h2.md` (R1 "Sofort
++spuerbar"). Jeder Slice ist so geschnitten, dass eine Session im echten
++Checkout ihn ohne weitere Klaerung umsetzen kann: Scope, Vertrag, UX-
++Akzeptanz, Schliessbeweis. Reihenfolge = Abarbeitungsreihenfolge.
++Alle LLM-/ASR-Schritte laufen ausschliesslich ueber die DGX-Rollen
++(ADR 0005); Clients sprechen nie direkt mit DGX -- der Server ist der
++Zugang zu DGX/Inference, auch fuer die native App.
++
++## S1: Vorlagen-Karten (Protokoll-Templates je Meeting-Typ)
++
++Ziel: Bei der Meeting-Anlage und beim Diktat waehlt man eine Karte
++("Jour fixe", "Kundengespraech", "Bewerbungsgespraech", "Standup/
++Review", "Notiz"); das Protokoll kommt strukturiert je Typ.
++
++- Server: neuer Settings-Block `templates[]` mit `id`, `title`,
++  `description`, `roles[]` (engineering/finance/hr/all),
++  `prompt` (DGX-LLM), `privacy_defaults` (Retention-Tage,
++  `delete_audio_after_publish`), versioniert als Datei im Notes-Git
++  (`templates/*.yml`), Editier-API nur fuer Operator.
++- `/notes` und der Meeting-Summary-Pfad akzeptieren `template_id`
++  (Fallback: bisherige `mode`-Werte bleiben gueltig).
++- "Bewerbungsgespraech" setzt strengere Defaults (kurze Retention,
++  Audio-Loeschung nach Freigabe an, Hinweistext Betroffenenrechte).
++- PWA: Kartenraster statt `modeSelect`-Dropdown; Rollen-Preset sortiert
++  die Karten (Rolle aus dem CompanyOS-Principal, Fallback "alle").
++- Achtung: PWA-Contract-Tests pruefen Selektoren in `index.html` --
++  Selektor-Liste im selben Slice aktualisieren.
++- Schliessbeweis: Templatestore-Tests (CRUD, Rollenfilter, Defaults),
++  `/notes`-Test mit `template_id`, PWA-Smoke mit Karten-Selektoren;
++  Prompt-Aenderung erzeugt Commit im Notes-Git.
++
++## S2: UX-Grundgesetz-Umbau (Startschirm + Wizard + Klartext)
++
++Ziel: Startschirm mit genau drei Wegen (Diktieren / Meeting aufnehmen /
++Aufnahme verarbeiten); Meeting-Anlage als gefuehrter Dialog; kein
++Fachjargon in der Oberflaeche.
++
++- PWA only, keine Server-Aenderung: neuer Einstiegsscreen, Meeting-
++  Wizard in 3 Schritten (Thema -> Personen -> jede Person bestaetigt),
++  Klartext-Map fuer alle Hints/Status (zentrale Tabelle im Code, damit
++  Texte an einer Stelle leben), bestehende Gates unveraendert.
++- Bestehende Panels (Review, Action Center, Settings) erscheinen erst,
++  wenn sie relevant sind (Zustandslogik, kein Feature-Umbau).
++- Schliessbeweis: `node --check`, aktualisierte Selektor-Contract-Tests,
++  Screenshot-Set Desktop/Mobile in `reports/visual/`, Usability-Smoke
++  mit drei Personen ohne Einweisung (Protokoll content-frei in #11).
++
++## S3: Late-Join-Recap ("Zusammenfassung bis jetzt")
++
++Ziel: Knopf waehrend laufender Meeting-Aufnahme liefert den Zwischen-
++stand; ebenso nutzbar beim Wiedereinstieg nach Pause.
++
++- Vertrag: `POST /meetings/{meeting_id}/recap` (Teilnehmer/Organizer);
++  Body: aktuelles Teil-Audio als Datei (Client baut es aus dem lokalen
++  Chunk-Tresor zusammen) ODER `job_id`-Referenz nach Stopp.
++- Server: schnelle ASR-Route (DGX, kleines Modell erlaubt) + DGX-LLM-
++  Kurzfassung; Teil-Audio wird nach der Antwort geloescht (kein neues
++  Retention-Objekt), Audit-Event `meeting_recap_generated` ohne Inhalt.
++- Gates: nur bei `capture_state in {recording, paused}` und ALL_READY;
++  Antwort nur an Teilnehmer.
++- PWA: Knopf im Aufnahme-Screen, Antwort als Overlay, nicht ins
++  Protokoll geschrieben.
++- Schliessbeweis: API-Tests (Gates, Fremdzugriff 403, Audio geloescht),
++  E2E mit synthetischem Audio.
++
++## S4: Follow-up-Entwurf als Action-Center-Typ
++
++Ziel: Nach Merge-Freigabe erzeugt ein Klick einen E-Mail-Entwurf aus dem
++freigegebenen Protokoll -- als reviewpflichtiger Draft, nie Versand.
++
++- Server: neuer Action-Draft-Typ `email_draft` (Empfaenger-Vorschlag =
++  Teilnehmer, Betreff, Body aus DGX-LLM); Draft-Lifecycle, Payload-Hash
++  und Approval-Receipt exakt wie bestehende Typen; Export nur als Text
++  in der Outbox (kein SMTP in diesem Slice).
++- PWA: Karte "Follow-up-E-Mail entwerfen" im Action Center nach Merge.
++- Schliessbeweis: bestehende Action-Center-Testmuster fuer den neuen
++  Typ (Gates: erst nach publiziertem Merge; Edit vor Approval; Reject).
++
++## S5: Kapitel + Sprungmarken
++
++Ziel: Protokoll mit Kapitelstruktur; Klick auf ein Kapitel oder ein
++Transkript-Segment springt im Audio an die Stelle.
++
++- Pipeline: Diarisierungs-Segmente tragen bereits Zeiten; DGX-LLM
++  gruppiert Segmente zu Kapiteln (Titel + Start-ms), Ergebnis in
++  Job-Result (`chapters[]`) und Markdown-Frontmatter (`chapters:`).
++- PWA-Review: Kapitelliste + Audio-Player (lokales Blob-Audio aus dem
++  Chunk-Tresor bzw. Upload), `currentTime`-Sprung; kein Server-Streaming
++  des Roh-Audios noetig.
++- Schliessbeweis: Jobs-API-Test (chapters im Result), Obsidian-Writer-
++  Test (Frontmatter), PWA-Smoke.
++
++## S6: Pi-Chime + Audio-Loeschpolicy
++
++Ziel: Fail-closed-Pausen sind im Raum hoerbar; Datenminimierung wird
++Policy-Schalter.
++
++- Pi: `voicehub-jabra.sh` bekommt `chime <ok|pause|error>` (aplay auf
++  Jabra) und spielt den Pause-Ton, wenn ein Upload-/Statusfehler die
++  Aufnahme betrifft; der kuenftige capture_node-Modus (R2+) haengt den
++  Chime an die Server-Pause-Events.
++- Server: Settings-Schalter `delete_raw_audio_after_publish` (Default
++  aus; "Bewerbungsgespraech"-Template setzt ihn an); Sweeper loescht
++  Roh-Audio nach `merge_published` + gespeicherter Note, Audit-Event.
++- Schliessbeweis: Sweeper-Test (loescht nur nach Publish, Legal-Hold
++  blockiert), `bash -n`, Pi-Smoke mit Ton.
++
++## Abhaengigkeiten und Reihenfolge
++
++S1 vor S2 (der Startschirm zeigt die Karten). S3 nutzt den Chunk-Tresor
++aus der Stabilitaets-Serie (PR-Patches 0001-0008 zuerst mergen und
++deployen). S5 setzt auf dem bestehenden Diarisierungs-Result auf. S6 ist
++unabhaengig. Jeder Slice einzeln mergebar; Doku-/TIME_LOG-Pflicht pro
++Slice gemaess AGENTS.md.
+-- 
+2.43.0
+

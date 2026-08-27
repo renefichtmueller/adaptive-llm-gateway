@@ -1,0 +1,68 @@
+From 6f6b80ad5dbe276bddbc8972b83fb9239376f167 Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Thu, 27 Aug 2026 06:08:09 +0000
+Subject: [PATCH 07/11] docs: log the lock-screen incident fixes across PWA,
+ iOS and Pi
+
+---
+ docs/project-log.md | 45 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+diff --git a/docs/project-log.md b/docs/project-log.md
+index b09157d..d250e8a 100644
+--- a/docs/project-log.md
++++ b/docs/project-log.md
+@@ -1,5 +1,50 @@
+ # VoiceHub Project Log
+ 
++## 2026-08-27: Sperr-Vorfall vom 25.08 -- Aufnahmen ueberstehen jetzt Sperre, Absturz und Netzverlust
++
++Am 25.08 starb eine Meeting-Aufnahme in der PWA, als sich das iPhone
++sperrte. Ursachenkette: kein Wake Lock (Auto-Lock mitten in der Aufnahme),
++iOS suspendiert die PWA bei Sperre vollstaendig, das Audio lebte nur im RAM
++des Tabs, und ein still beendeter MediaRecorder liess stop() mit "Keine
++aktive Meeting-Aufnahme vorhanden" scheitern -- Totalverlust. Die native
++App haette identisch versagt: kein UIBackgroundModes audio, WAV in tmp/,
++und der Upload-Callback loeschte die Datei auch im Fehlerfall.
++
++Fixes in dieser Serie (entstanden ausserhalb des Checkouts, per git am
++integriert):
++
++1. PWA: stop() liefert auch bei totem Recorder die gesammelten Chunks aus;
++   Mikrofon-Track- und Recorder-Ereignisse pausieren fail-closed mit dem
++   neuen Reason audio_interrupted statt Stille aufzuzeichnen.
++2. PWA: Screen Wake Lock am setState-Lebenszyklus (recording/paused/
++   finishing); Rueckkehr aus der Sperre prueft den Recorder ehrlich, ein
++   totes Mikrofon blockiert das Fortsetzen mit klarer Ansage.
++3. PWA: IndexedDB-Tresor chunk-vault.js -- jeder 2-s-Chunk liegt auf
++   Platte, bevor er ins Netz geht; beim Start bietet ein Banner
++   unterbrochene Aufnahmen zur Verarbeitung an (Server-Capture wird bei
++   Bedarf gestoppt; ist das Meeting weg, laeuft der Upload ohne
++   meeting_id, damit Audio nie haengen bleibt).
++4. Shell v26: versionierte URLs und Cache-Name nach dem Muster vom 23.08,
++   chunk-vault.js ist Teil der Shell.
++5. iOS-App: UIBackgroundModes audio, .playAndRecord mit Interruption-,
++   Route-Change- und Media-Reset-Handling, Ablage in Documents/Aufnahmen,
++   Loeschen erst nach erfolgreicher Verarbeitung, Upload aus Datei statt
++   komplett im RAM.
++6. Pi/Jabra: voicehub-jabra.sh (run/stop/flush/status) plus
++   voicehub-pi-recorder.service und voicehub-pi-uploader.timer --
++   Warteschlange mit Retry statt manueller curl-Kette; schliesst das
++   Thin-Client-Gate aus Issue #4 bis auf DNS/TLS.
++
++Evidence: node --check fuer app.js, meeting-recorder.js, chunk-vault.js
++und sw.js; bash -n fuer das Pi-Skript; YAML-, plist- und systemd-Parse-
++Checks. Kein Geraetenachweis: Die Sperr-/Anruf-/Absturz-Matrix aus Issue
++#9 bleibt das Abnahme-Gate, die iOS-Aenderungen brauchen xcodegen plus
++einen echten Geraetetest.
++
++Offen: Login der nativen App (OIDC-Handoff), Meeting-Gate-Paritaet der
++App und TestFlight -- Zielbild und Slices stehen im Konzept
++"VoiceHub Native" vom 27.08.
++
+ ## 2026-08-23: Erster echter Nutzertag -- sieben Fehler, die alle gleich aussahen
+ 
+ Rene hat VoiceHub den ganzen Tag real benutzt. Dabei kamen sieben unabhaengige
+-- 
+2.43.0
+
