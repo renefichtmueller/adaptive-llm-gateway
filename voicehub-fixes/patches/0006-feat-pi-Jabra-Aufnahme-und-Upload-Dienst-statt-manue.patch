@@ -1,7 +1,7 @@
 From 52ef1b055f23f920084db483cd0f902b963a4350 Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 06:06:26 +0000
-Subject: [PATCH 6/8] feat(pi): Jabra-Aufnahme- und Upload-Dienst statt
+Subject: [PATCH 6/9] feat(pi): Jabra-Aufnahme- und Upload-Dienst statt
  manueller curl-Kette
 
 Schliesst das offene Thin-Client/Uploader-Gate aus Issue #4: Der Pi nimmt

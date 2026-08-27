@@ -19,7 +19,7 @@ git am /pfad/zu/voicehub-fixes/patches/*.patch
 Falls `main` inzwischen weitergewandert ist und ein Patch nicht greift:
 `git am -3` nutzt die mitgelieferten Blob-Referenzen für einen 3-Wege-Merge.
 
-## Inhalt (8 Patches)
+## Inhalt (9 Patches)
 
 1. **fix(pwa)** `meeting-recorder.js`: `stop()` liefert auch bei einem von
    iOS still beendeten Recorder die gesammelten Chunks aus (der 25.08-
@@ -50,6 +50,9 @@ Falls `main` inzwischen weitergewandert ist und ein Patch nicht greift:
    WebSockets trennt), wandert der bisher erkannte Text in den
    Review-Zustand statt zu verfallen; dazu neuer „Text kopieren“-Button,
    der auch ohne erreichbaren Server funktioniert.
+9. **docs** `docs/roadmap-2026-h2.md`: Beschluss vom 27.08 – alle 15
+   Marktradar-Punkte (inkl. Bot-Pfad) in vier Releases, unter dem
+   UX-Grundgesetz „autodidaktisch für Engineering, Buchhaltung und HR“.
 
 ## Verifiziert (ohne Gerät)
 

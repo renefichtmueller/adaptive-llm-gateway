@@ -1,7 +1,7 @@
 From 87a96076e92c6d70056e952557f30b15f64871c3 Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 09:13:02 +0000
-Subject: [PATCH 8/8] fix(pwa): rescue dictation text when the connection drops
+Subject: [PATCH 8/9] fix(pwa): rescue dictation text when the connection drops
  mid-recording
 
 Riss die WebSocket-Verbindung mitten im Live-Diktat ab (real passiert am

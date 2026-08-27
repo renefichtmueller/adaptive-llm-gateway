@@ -1,7 +1,7 @@
 From 0ba2a65b116141cccf880783a84dd0c915bf9276 Mon Sep 17 00:00:00 2001
 From: Rene Fichtmueller <rf@flexoptix.net>
 Date: Thu, 27 Aug 2026 06:01:22 +0000
-Subject: [PATCH 4/8] chore(pwa): bump shell to v26 and cache the chunk vault
+Subject: [PATCH 4/9] chore(pwa): bump shell to v26 and cache the chunk vault
 
 Versionierte URLs und Cache-Name folgen dem Muster vom 23.08., damit CDN
 und offene Tabs die neuen Dateien sicher ausliefern; chunk-vault.js wird
