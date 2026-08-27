@@ -7,6 +7,7 @@
     "declarationMap": true,
     "sourceMap": true
   },
+  "references": [{ "path": "../client" }],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

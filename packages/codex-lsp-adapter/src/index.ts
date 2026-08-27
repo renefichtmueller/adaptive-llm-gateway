@@ -1,25 +1,46 @@
-import { createTIPClient } from '@llm-gateway/client'
+import { createTIPClient, type TIPCompletionResult } from '@llm-gateway/client'
 import {
   createConnection,
   TextDocuments,
-  Diagnostic,
-  DiagnosticSeverity,
-  InitializeResult,
-  ServerCapabilities,
-  Position,
-  Range,
-  CompletionItem,
+  TextDocumentSyncKind,
+  MarkupKind,
   CompletionItemKind,
-  MarkupKind
-} from 'vscode-languageserver'
+  type CompletionItem,
+  type CompletionParams,
+  type DefinitionParams,
+  type Hover,
+  type HoverParams,
+  type InitializeResult,
+  type ServerCapabilities,
+  type TextDocumentChangeEvent
+} from 'vscode-languageserver/node.js'
 import { TextDocument } from 'vscode-languageserver-textdocument'
+
+/** Render a TIP completion as an LSP completion item. */
+export function toCompletionItem(response: TIPCompletionResult): CompletionItem {
+  return {
+    label: response.text.split('\n')[0] ?? '',
+    kind: CompletionItemKind.Snippet,
+    documentation: {
+      kind: MarkupKind.Markdown,
+      value: `**Model**: ${response.model}\n**Confidence**: ${(response.confidence * 100).toFixed(1)}%`
+    },
+    insertText: response.text,
+    detail: response.fallback ? '(Ollama fallback)' : '(Gateway)'
+  }
+}
+
+/** Render a TIP completion as LSP hover markdown. */
+export function toHoverMarkdown(response: TIPCompletionResult): string {
+  return `${response.text}\n\n*${response.model} (${(response.confidence * 100).toFixed(0)}%)*`
+}
 
 export class CodexLSPAdapter {
   private connection = createConnection()
   private documents = new TextDocuments(TextDocument)
   private client = createTIPClient({
-    agentId: 'codex-lsp-server',
-    ollamaUrl: process.env.OLLAMA_URL || 'localhost:11434'
+    agentId: process.env.AGENT_ID || 'codex-lsp-server',
+    ollamaUrl: process.env.OLLAMA_URL || 'http://localhost:11434'
   })
 
   constructor() {
@@ -35,9 +56,9 @@ export class CodexLSPAdapter {
     this.documents.listen(this.connection)
   }
 
-  private handleInitialize() {
+  private handleInitialize(): InitializeResult {
     const capabilities: ServerCapabilities = {
-      textDocumentSync: 1,
+      textDocumentSync: TextDocumentSyncKind.Full,
       completionProvider: {
         resolveProvider: true,
         triggerCharacters: ['.', ' ', '(']
@@ -50,42 +71,26 @@ export class CodexLSPAdapter {
       }
     }
 
-    const result: InitializeResult = { capabilities }
-    return result
+    return { capabilities }
   }
 
-  private async handleCompletion(params: any) {
+  private async handleCompletion(params: CompletionParams): Promise<CompletionItem[]> {
     const doc = this.documents.get(params.textDocument.uri)
     if (!doc) return []
 
-    const position = params.position
-    const text = doc.getText()
-    const offset = doc.offsetAt(position)
-
     try {
       const response = await this.client.completion(
-        `Complete the following code:\n\n${text}\n\n[cursor here]`,
+        `Complete the following code:\n\n${doc.getText()}\n\n[cursor here]`,
         { maxTokens: 500 }
       )
 
-      return [
-        {
-          label: response.text.split('\n')[0],
-          kind: CompletionItemKind.Snippet,
-          documentation: {
-            kind: MarkupKind.Markdown,
-            value: `**Model**: ${response.model}\n**Confidence**: ${(response.confidence * 100).toFixed(1)}%`
-          },
-          insertText: response.text,
-          detail: response.fallback ? '(Ollama fallback)' : '(Gateway)'
-        } as CompletionItem
-      ]
-    } catch (error) {
+      return [toCompletionItem(response)]
+    } catch {
       return []
     }
   }
 
-  private async handleHover(params: any) {
+  private async handleHover(params: HoverParams): Promise<Hover | null> {
     const doc = this.documents.get(params.textDocument.uri)
     if (!doc) return null
 
@@ -103,23 +108,21 @@ export class CodexLSPAdapter {
       return {
         contents: {
           kind: MarkupKind.Markdown,
-          value: `${response.text}\n\n*${response.model} (${(response.confidence * 100).toFixed(0)}%)*`
+          value: toHoverMarkdown(response)
         }
       }
-    } catch (error) {
+    } catch {
       return null
     }
   }
 
-  private async handleDefinition(params: any) {
-    // Definition lookup would be more complex in real implementation
-    // For now, return null - could integrate with symbol indexing
+  private async handleDefinition(_params: DefinitionParams): Promise<null> {
+    // Definition lookup would need symbol indexing — not implemented yet.
     return null
   }
 
-  private async handleDocumentChange(change: any) {
-    const doc = change.document
-    // Could perform diagnostics here on significant changes
+  private handleDocumentChange(_change: TextDocumentChangeEvent<TextDocument>): void {
+    // Diagnostics on significant changes could be added here.
   }
 
   start() {

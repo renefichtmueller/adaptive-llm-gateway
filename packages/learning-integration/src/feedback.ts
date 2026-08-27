@@ -1,4 +1,4 @@
-import { Client } from 'postgres'
+import type { Sql } from 'postgres'
 
 export type FeedbackOutcome = 'success' | 'fallback' | 'timeout' | 'error' | 'user_rejected'
 
@@ -22,7 +22,7 @@ export interface FeedbackStats {
 }
 
 export class FeedbackProcessor {
-  constructor(private db: Client) {}
+  constructor(private db: Sql) {}
 
   async processFeedback(feedback: FeedbackRequest): Promise<void> {
     const timestamp = new Date()
@@ -35,9 +35,9 @@ export class FeedbackProcessor {
         ${feedback.requestId},
         ${feedback.agentId},
         ${feedback.outcome},
-        ${feedback.completionQuality || null},
-        ${feedback.latencyMs || null},
-        ${feedback.tokenCount || null},
+        ${feedback.completionQuality ?? null},
+        ${feedback.latencyMs ?? null},
+        ${feedback.tokenCount ?? null},
         ${JSON.stringify({
           userSatisfaction: feedback.userSatisfaction,
           ...feedback.metadata
@@ -197,6 +197,8 @@ export class FeedbackProcessor {
   ): Promise<void> {
     const metadata = { userSatisfaction: satisfaction }
 
+    // agent_feedback is an append-only log (multiple rows per request are
+    // valid), so user feedback is recorded as an additional entry.
     await this.db`
       INSERT INTO agent_feedback (
         request_id, agent_id, outcome, metadata
@@ -206,8 +208,6 @@ export class FeedbackProcessor {
         'success',
         ${JSON.stringify(metadata)}
       )
-      ON CONFLICT (request_id) DO UPDATE SET
-        metadata = ${JSON.stringify(metadata)}
     `
   }
 }

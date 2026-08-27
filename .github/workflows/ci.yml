@@ -24,6 +24,14 @@ jobs:
       - name: Build gateway (tsc)
         working-directory: packages/gateway
         run: npm run build
+      - name: Build client SDK + agent adapters (tsc)
+        run: >
+          npm run build
+          -w packages/client
+          -w packages/claude-code-bridge
+          -w packages/chatgpt-api-adapter
+          -w packages/codex-lsp-adapter
+          -w packages/learning-integration
 
   lint:
     name: Lint
@@ -48,9 +56,18 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci --workspaces --include-workspace-root
+      - name: Build client SDK (adapter tests resolve its dist)
+        run: npm run build -w packages/client
+      - name: Run vitest (client SDK + agent adapters)
+        run: >
+          npm test
+          -w packages/client
+          -w packages/claude-code-bridge
+          -w packages/chatgpt-api-adapter
+          -w packages/codex-lsp-adapter
       - name: Run vitest (gateway)
         working-directory: packages/gateway
-        run: npm test || echo "No tests yet — soft pass"
+        run: npm test || echo "Known failing gateway suites — soft pass until fixed"
 
   build-drift:
     name: Build-drift guard

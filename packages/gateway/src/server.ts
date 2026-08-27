@@ -98,10 +98,11 @@ async function buildServer() {
     .filter(Boolean);
   await server.register(fastifyCors, {
     origin: [
-      'http://localhost:0000',
-      'http://localhost:0000',
-      'http://localhost:0000',
-      'http://localhost:0000',
+      // Gateway itself (dashboard) + the agent adapters (ADR-0005)
+      'http://localhost:8787',
+      'http://127.0.0.1:8787',
+      'http://localhost:8788',
+      'http://127.0.0.1:8788',
       ...corsAllowList,
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -198,7 +199,7 @@ async function main() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
-  const port = parseInt(process.env['PORT'] ?? '0000', 10);
+  const port = parseInt(process.env['PORT'] ?? '8787', 10);
   const host = process.env['HOST'] ?? '0.0.0.0';
 
   try {
