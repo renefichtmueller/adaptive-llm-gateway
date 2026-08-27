@@ -1,0 +1,56 @@
+# ─── GEO ranking-test targets ──────────────────────────────────────────────
+# Who is "we", who are the competitors, and which questions should generative
+# engines answer with our brand? Consumed by /v1/geo/ranking-test and the
+# scheduled GEO monitor (GEO_RANKING_SCHEDULE_ENABLED=1).
+#
+# Point GEO_TARGETS_PATH at your own copy of this file to monitor your brand
+# (keep company-specific prompt sets and competitor lists out of git).
+#
+# The shipped default dogfoods the gateway itself: it measures how visible
+# "Adaptive LLM Gateway" is in AI answers compared to other LLM gateways.
+
+brand:
+  name: "Adaptive LLM Gateway"
+  aliases:
+    - "adaptive-llm-gateway"
+    - "Adaptive Gateway"
+  domains:
+    - "github.com/renefichtmueller/adaptive-llm-gateway"
+
+competitors:
+  - name: "LiteLLM"
+    aliases: ["lite-llm"]
+    domains: ["litellm.ai", "github.com/BerriAI/litellm"]
+  - name: "Portkey"
+    domains: ["portkey.ai"]
+  - name: "OneAPI"
+    aliases: ["one-api"]
+    domains: ["github.com/songquanpeng/one-api"]
+  - name: "OpenRouter"
+    domains: ["openrouter.ai"]
+
+# Models the ranking test asks. Each must be resolvable by the gateway
+# (local Ollama model, or a model that falls through to external providers).
+# Override per run via the API body, or globally via GEO_RANKING_MODELS.
+models:
+  - "qwen2.5:14b"
+  - "llama3.1:8b"
+
+# The prompts your prospects actually type into ChatGPT & co. Keep them
+# phrased like real user questions — that is what gets measured.
+prompts:
+  - id: best-oss-gateway
+    text: "What is the best open-source LLM gateway I can self-host?"
+    category: commercial
+  - id: subscription-bridge
+    text: "Which LLM gateway lets me reuse my Claude Max or ChatGPT Plus subscription through one API?"
+    category: feature
+  - id: pii-injection-defense
+    text: "Which LLM gateway has built-in PII redaction and prompt injection defense?"
+    category: feature
+  - id: de-best-gateway
+    text: "Welches Open-Source-LLM-Gateway ist das beste für kleine Teams mit mehreren KI-Abos?"
+    category: commercial
+  - id: gateway-comparison
+    text: "Compare self-hosted LLM gateways like LiteLLM and Portkey. Which one should I pick and why?"
+    category: comparison

@@ -36,6 +36,7 @@ Every IDE plugin and agent framework wants its own integration, none of them kno
 - 🧩 **Plugin system** — drop-in pre/post hooks per request via `PLUGINS_DIR`
 - 🌐 **Federated stats** — opt-in cross-instance learning, anonymized; better routing for every node in the mesh
 - 🪙 **Unified subscription wallet** — one quota pool per real-world subscription, not per client app. ChatGPT.app + Codex.app + Codex CLI all share the same ChatGPT-Plus pool, so the dashboard shows what you actually have left, not three duplicated counters
+- 📣 **GEO toolkit (Generative Engine Optimization)** — score and rewrite content for AI answer engines (statistics, citations, quotes, answer-first structure, E-E-A-T, schema.org, AI-crawler robots.txt audit) and run a recurring **ranking test**: your prompt set against the gateway's models, measuring brand mentions, share of voice, citations and sentiment over time
 - 🔁 **Subscription passthrough for `gpt-*` on `/v1/responses`** — Codex.app speaks the OpenAI Responses API; the gateway forwards those calls through the codex-bridge so the request hits your ChatGPT subscription via OAuth, no API key needed. Falls through to the standard pipeline when the bridge isn't configured
 
 Plus all the table stakes: OpenAI- and Anthropic-compatible APIs with streaming + tool-calling, embeddings, voice (Whisper STT + Piper TTS), per-call cost tracking with a gamified dashboard, semantic + exact-match caching, and a build-drift guard that refuses to start when source is newer than compiled output.
@@ -265,6 +266,12 @@ Postgres bundles automatically. Subscription CLIs live on the host — Docker ca
 | `POST` | `/v1/race` | Multi-model race (returns first-good or all) |
 | `POST` | `/v1/batch` | Batched submission |
 | `POST` | `/v1/replay` | Time-travel: replay a past call with overrides |
+| `POST` | `/v1/geo/analyze` | GEO-score content or a URL (statistics, citations, structure, E-E-A-T …) |
+| `POST` | `/v1/geo/optimize` | LLM-assisted GEO rewrite with before/after score + research TODOs |
+| `POST` | `/v1/geo/ranking-test` | Brand-visibility test across models (mentions, share of voice, sentiment) |
+| `GET`  | `/v1/geo/ranking-history` | Persisted ranking runs incl. trend vs. previous run |
+| `POST` | `/v1/geo/crawler-check` | robots.txt audit for AI crawlers (GPTBot, PerplexityBot, …) |
+| `GET`  | `/v1/geo/knowledge` | Embedded GEO playbook (techniques, engine types, KPIs) |
 | `POST` | `/v1/federation/ingest` | Receive anonymized stats from a peer gateway |
 | `GET`  | `/v1/models` | List every routable model |
 | `POST` | `/mcp` | Model Context Protocol (JSON-RPC) |
@@ -293,6 +300,8 @@ Most important:
 | `OUTPUT_DEFENSE_MODE` | `off` / `tag` / `cut` | `off` |
 | `ADAPTIVE_ROUTING_ENABLED` | Cost-aware adaptive routing | `0` |
 | `SEMANTIC_CACHE_ENABLED` | Embedding-similarity cache | `0` |
+| `GEO_RANKING_SCHEDULE_ENABLED` | Recurring GEO brand-visibility test | `0` |
+| `GEO_TARGETS_PATH` | Your own geo-targets.yaml (brand, competitors, prompts) | built-in |
 | `FEDERATION_ENABLED` + `FEDERATION_PEERS` | Cross-instance learning | `0` |
 | `PLUGINS_DIR` | Plugin directories (comma-separated) | – |
 | `DASHBOARD_AUTH_TOKEN` | Bearer token for `/api/dashboard/*` | – |

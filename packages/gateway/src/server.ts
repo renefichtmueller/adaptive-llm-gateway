@@ -20,6 +20,8 @@ import { loadPlugins } from './modules/plugin-system.js';
 import { startBridgeWatchdog } from './modules/bridge-watchdog.js';
 import { ingestPeerStats, scheduleFederationPublisher, buildStats } from './modules/federated-stats.js';
 import { scheduleAdaptiveLearner, getAllRecommendations } from './modules/adaptive-routing.js';
+import { geoRoute } from './routes/geo.js';
+import { scheduleGeoRankingMonitor } from './modules/geo-monitor.js';
 import { staticRoute } from './routes/static.js';
 import { getPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
@@ -136,6 +138,7 @@ async function buildServer() {
   });
   await server.register(batchRoute, { prefix: '/v1' });
   await server.register(classifyRoute, { prefix: '/v1' });
+  await server.register(geoRoute, { prefix: '/v1' });
   await server.register(reviewRoute, { prefix: '/v1' });
   await server.register(learningInsightsRoute, { prefix: '/v1' });
   await server.register(healthRoute);
@@ -247,6 +250,13 @@ async function main() {
       scheduleAdaptiveLearner(pool);
     } catch (err) {
       logger.warn({ err }, 'Adaptive learner scheduling failed');
+    }
+
+    // GEO ranking monitor (opt-in via GEO_RANKING_SCHEDULE_ENABLED=1)
+    try {
+      scheduleGeoRankingMonitor(getPool());
+    } catch (err) {
+      logger.warn({ err }, 'GEO ranking monitor scheduling failed');
     }
 
     // Federation publisher (opt-in via FEDERATION_ENABLED=1)
