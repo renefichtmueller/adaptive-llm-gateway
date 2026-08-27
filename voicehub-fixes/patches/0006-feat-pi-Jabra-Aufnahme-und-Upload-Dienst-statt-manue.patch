@@ -1,0 +1,365 @@
+From 52ef1b055f23f920084db483cd0f902b963a4350 Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Thu, 27 Aug 2026 06:06:26 +0000
+Subject: [PATCH 6/7] feat(pi): Jabra-Aufnahme- und Upload-Dienst statt
+ manueller curl-Kette
+
+Schliesst das offene Thin-Client/Uploader-Gate aus Issue #4: Der Pi nimmt
+das Jabra Speak2 75 ueber einen systemd-Dienst auf (arecord, 16 kHz mono)
+und ein Timer laedt die Warteschlange zu VoiceHub hoch. Platte vor Netz
+wie ueberall: Dateien verlassen pending/ erst nach bestaetigtem
+Job-Ergebnis; kein Netz oder ein haengender Job verliert nichts, fachlich
+fehlgeschlagene Jobs wandern nach failed/ zur Pruefung. Token nur ueber
+/etc/voicehub-pi.env (0600, X-VoiceHub-Api-Token), TLS ueber CA-Option
+statt -k.
+---
+ .../systemd/voicehub-pi-recorder.service      |  16 ++
+ .../systemd/voicehub-pi-uploader.service      |  10 +
+ deployment/systemd/voicehub-pi-uploader.timer |  10 +
+ scripts/pi-jabra/README.md                    |  55 ++++++
+ scripts/pi-jabra/voicehub-jabra.sh            | 180 ++++++++++++++++++
+ scripts/pi-jabra/voicehub-pi.env.example      |  26 +++
+ 6 files changed, 297 insertions(+)
+ create mode 100644 deployment/systemd/voicehub-pi-recorder.service
+ create mode 100644 deployment/systemd/voicehub-pi-uploader.service
+ create mode 100644 deployment/systemd/voicehub-pi-uploader.timer
+ create mode 100644 scripts/pi-jabra/README.md
+ create mode 100755 scripts/pi-jabra/voicehub-jabra.sh
+ create mode 100644 scripts/pi-jabra/voicehub-pi.env.example
+
+diff --git a/deployment/systemd/voicehub-pi-recorder.service b/deployment/systemd/voicehub-pi-recorder.service
+new file mode 100644
+index 0000000..c17859d
+--- /dev/null
++++ b/deployment/systemd/voicehub-pi-recorder.service
+@@ -0,0 +1,16 @@
++[Unit]
++Description=VoiceHub Pi/Jabra Aufnahme (arecord in die Upload-Warteschlange)
++Documentation=file:///usr/local/bin/voicehub-jabra.sh
++After=sound.target
++
++[Service]
++Type=exec
++ExecStart=/usr/local/bin/voicehub-jabra.sh run
++# SIGTERM beendet arecord sauber; die fertige WAV wandert nach pending/.
++KillSignal=SIGTERM
++TimeoutStopSec=15
++User=renefichtmueller
++Restart=no
++
++[Install]
++WantedBy=multi-user.target
+diff --git a/deployment/systemd/voicehub-pi-uploader.service b/deployment/systemd/voicehub-pi-uploader.service
+new file mode 100644
+index 0000000..ae8c5df
+--- /dev/null
++++ b/deployment/systemd/voicehub-pi-uploader.service
+@@ -0,0 +1,10 @@
++[Unit]
++Description=VoiceHub Pi/Jabra Upload-Warteschlange leeren
++Documentation=file:///usr/local/bin/voicehub-jabra.sh
++Wants=network-online.target
++After=network-online.target
++
++[Service]
++Type=oneshot
++ExecStart=/usr/local/bin/voicehub-jabra.sh flush
++User=renefichtmueller
+diff --git a/deployment/systemd/voicehub-pi-uploader.timer b/deployment/systemd/voicehub-pi-uploader.timer
+new file mode 100644
+index 0000000..17be19b
+--- /dev/null
++++ b/deployment/systemd/voicehub-pi-uploader.timer
+@@ -0,0 +1,10 @@
++[Unit]
++Description=VoiceHub Pi/Jabra Upload alle 2 Minuten
++
++[Timer]
++OnBootSec=2min
++OnUnitActiveSec=2min
++Unit=voicehub-pi-uploader.service
++
++[Install]
++WantedBy=timers.target
+diff --git a/scripts/pi-jabra/README.md b/scripts/pi-jabra/README.md
+new file mode 100644
+index 0000000..e78fcd5
+--- /dev/null
++++ b/scripts/pi-jabra/README.md
+@@ -0,0 +1,55 @@
++# VoiceHub Pi/Jabra-Knoten
++
++Wiederholbarer Aufnahme- und Upload-Dienst für den Raspberry Pi mit Jabra
++Speak2 75 – ersetzt die manuellen `arecord`/`curl`-Aufrufe aus
++`docs/runbooks/pi-jabra-capture-node.md` und schließt das offene
++„Thin-client/uploader“-Gate aus Issue #4.
++
++## Prinzip
++
++Platte vor Netz, wie überall in VoiceHub: `arecord` schreibt in eine lokale
++Warteschlange (`pending/`); ein Timer lädt sie zu VoiceHub hoch und
++verschiebt eine Datei erst nach bestätigtem Job-Ergebnis (`done`). Kein
++Netz, ein Neustart oder ein hängender Job verlieren nichts – die Datei
++bleibt liegen und der nächste Lauf versucht es erneut. Fachlich
++fehlgeschlagene Jobs wandern nach `failed/` zur Prüfung statt endlos zu
++rotieren.
++
++## Installation auf dem Pi
++
++```bash
++sudo install -m 0755 scripts/pi-jabra/voicehub-jabra.sh /usr/local/bin/voicehub-jabra.sh
++sudo install -m 0600 scripts/pi-jabra/voicehub-pi.env.example /etc/voicehub-pi.env
++sudo $EDITOR /etc/voicehub-pi.env   # URL, optional Token und CA eintragen
++sudo mkdir -p /var/lib/voicehub-pi && sudo chown renefichtmueller /var/lib/voicehub-pi
++
++sudo cp deployment/systemd/voicehub-pi-recorder.service /etc/systemd/system/
++sudo cp deployment/systemd/voicehub-pi-uploader.service /etc/systemd/system/
++sudo cp deployment/systemd/voicehub-pi-uploader.timer /etc/systemd/system/
++sudo systemctl daemon-reload
++sudo systemctl enable --now voicehub-pi-uploader.timer
++```
++
++## Bedienung
++
++```bash
++sudo systemctl start voicehub-pi-recorder    # Aufnahme starten
++sudo systemctl stop voicehub-pi-recorder     # Aufnahme beenden -> pending/
++voicehub-jabra.sh status                     # Zustand ansehen
++voicehub-jabra.sh flush                      # Upload sofort anstoßen
++```
++
++Der Timer leert `pending/` alle zwei Minuten von selbst; `done/` wird nach
++`RETENTION_DAYS` (Standard 7) aufgeräumt.
++
++## Sicherheit
++
++- Kein Token und kein Secret im Repo; `/etc/voicehub-pi.env` gehört auf
++  `0600`. Der optionale Token wird als `X-VoiceHub-Api-Token` gesendet
++  (Maschinen-Gate aus `src/voicehub/api/auth.py`).
++- TLS niemals mit `-k` aushebeln: Für eine interne CA `CURL_OPTS=--cacert …`
++  setzen. Der saubere DNS-/TLS-Name für den Pi-Pfad bleibt das offene Gate
++  aus Issue #4.
++- Uploads laufen als einfacher Transkriptionsjob ohne `meeting_id` – die
++  Consent-/Meeting-Gates bleiben unberührt; für Meeting-Aufnahmen mit
++  Diarisierung gilt weiterhin der Meeting-Vertrag der PWA/App.
+diff --git a/scripts/pi-jabra/voicehub-jabra.sh b/scripts/pi-jabra/voicehub-jabra.sh
+new file mode 100755
+index 0000000..7f4484c
+--- /dev/null
++++ b/scripts/pi-jabra/voicehub-jabra.sh
+@@ -0,0 +1,180 @@
++#!/usr/bin/env bash
++# VoiceHub Pi/Jabra-Aufnahme- und Upload-Knoten (Jabra Speak2 75 am Raspberry Pi).
++#
++# Ersetzt die manuellen arecord/curl-Aufrufe aus dem Runbook
++# docs/runbooks/pi-jabra-capture-node.md durch einen wiederholbaren Ablauf:
++#
++#   run     Aufnahme starten (laeuft bis SIGTERM/SIGINT, z. B. systemctl stop);
++#           beim Stopp wandert die fertige WAV in die Upload-Warteschlange.
++#   stop    Laufende Aufnahme sauber beenden (fuer manuelle Nutzung).
++#   flush   Warteschlange hochladen: /jobs/transcribe + Job-Poll; erst nach
++#           "done" wird die Datei nach done/ verschoben. Kein Netz oder ein
++#           haengender Job verliert nichts -- die Datei bleibt in pending/
++#           und der naechste Lauf versucht es erneut.
++#   status  Zustand von Aufnahme und Warteschlange anzeigen.
++#
++# Konfiguration in /etc/voicehub-pi.env (0600, kein Secret im Repo):
++#   VOICEHUB_URL           z. B. https://erik/voicehub-api (Pflicht fuer flush)
++#   VOICEHUB_API_TOKEN     optionaler Maschinen-Token (X-VoiceHub-Api-Token)
++#   ALSA_DEVICE            Standard plughw:J75,0 (Jabra Speak2 75)
++#   SPOOL_DIR              Standard /var/lib/voicehub-pi
++#   DIARIZE                true/false, Standard false
++#   EXPECTED_SPEAKERS      optional, nur mit DIARIZE=true sinnvoll
++#   JOB_TIMEOUT_SECONDS    Standard 900
++#   RETENTION_DAYS         Aufbewahrung in done/, Standard 7
++#   CURL_OPTS              z. B. --cacert /etc/ssl/certs/erik.pem -- niemals
++#                          dauerhaft -k; das offene DNS/TLS-Gate aus Issue #4
++#                          gehoert ueber einen echten Zertifikatsnamen gefixt.
++set -euo pipefail
++
++ENV_FILE="${VOICEHUB_PI_ENV:-/etc/voicehub-pi.env}"
++if [[ -f "$ENV_FILE" ]]; then
++  # shellcheck disable=SC1090
++  source "$ENV_FILE"
++fi
++
++VOICEHUB_URL="${VOICEHUB_URL:-}"
++VOICEHUB_API_TOKEN="${VOICEHUB_API_TOKEN:-}"
++ALSA_DEVICE="${ALSA_DEVICE:-plughw:J75,0}"
++SPOOL_DIR="${SPOOL_DIR:-/var/lib/voicehub-pi}"
++DIARIZE="${DIARIZE:-false}"
++EXPECTED_SPEAKERS="${EXPECTED_SPEAKERS:-}"
++JOB_TIMEOUT_SECONDS="${JOB_TIMEOUT_SECONDS:-900}"
++RETENTION_DAYS="${RETENTION_DAYS:-7}"
++CURL_OPTS="${CURL_OPTS:-}"
++
++RECORDING_DIR="$SPOOL_DIR/recording"
++PENDING_DIR="$SPOOL_DIR/pending"
++DONE_DIR="$SPOOL_DIR/done"
++FAILED_DIR="$SPOOL_DIR/failed"
++PID_FILE="$SPOOL_DIR/recorder.pid"
++
++log() { printf '%s %s\n' "$(date -Is)" "$*"; }
++die() { log "FEHLER: $*" >&2; exit 1; }
++
++ensure_dirs() { mkdir -p "$RECORDING_DIR" "$PENDING_DIR" "$DONE_DIR" "$FAILED_DIR"; }
++
++api_curl() {
++  local -a auth=()
++  [[ -n "$VOICEHUB_API_TOKEN" ]] && auth=(-H "X-VoiceHub-Api-Token: $VOICEHUB_API_TOKEN")
++  # shellcheck disable=SC2086
++  curl -sS --fail ${CURL_OPTS} "${auth[@]}" "$@"
++}
++
++json_field() {
++  python3 -c 'import json,sys; print(json.load(sys.stdin).get(sys.argv[1]) or "")' "$1"
++}
++
++cmd_run() {
++  ensure_dirs
++  if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
++    die "Aufnahme laeuft bereits (PID $(cat "$PID_FILE"))."
++  fi
++  [[ -n "$VOICEHUB_URL" ]] || log "Hinweis: VOICEHUB_URL ist leer -- Upload spaeter per flush nach Konfiguration."
++  local file
++  file="$RECORDING_DIR/rec-$(date +%Y%m%d-%H%M%S).wav"
++  log "Aufnahme startet: $file (Geraet $ALSA_DEVICE, 16 kHz mono)"
++  # arecord finalisiert den WAV-Header bei SIGINT sauber.
++  arecord -D "$ALSA_DEVICE" -f S16_LE -r 16000 -c 1 -t wav "$file" &
++  local pid=$!
++  echo "$pid" > "$PID_FILE"
++
++  local finished=0
++  finalize() {
++    [[ "$finished" -eq 1 ]] && return
++    finished=1
++    kill -INT "$pid" 2>/dev/null || true
++    wait "$pid" 2>/dev/null || true
++    rm -f "$PID_FILE"
++    if [[ -s "$file" ]]; then
++      mv "$file" "$PENDING_DIR/"
++      log "Aufnahme beendet und eingereiht: pending/$(basename "$file")"
++    else
++      rm -f "$file"
++      log "Aufnahme beendet, keine Daten aufgezeichnet."
++    fi
++  }
++  trap finalize INT TERM
++  wait "$pid" || true
++  finalize
++}
++
++cmd_stop() {
++  [[ -f "$PID_FILE" ]] || die "Keine laufende Aufnahme."
++  kill -INT "$(cat "$PID_FILE")" 2>/dev/null || die "Aufnahmeprozess nicht erreichbar."
++  log "Stopp angefordert -- die Datei wandert gleich nach pending/."
++}
++
++cmd_flush() {
++  ensure_dirs
++  [[ -n "$VOICEHUB_URL" ]] || die "VOICEHUB_URL ist nicht konfiguriert ($ENV_FILE)."
++  shopt -s nullglob
++  local uploaded=0 open=0
++  local file
++  for file in "$PENDING_DIR"/*.wav; do
++    log "Upload: $(basename "$file")"
++    local -a form=(-F "file=@$file;type=audio/wav" -F "diarize=$DIARIZE")
++    [[ -n "$EXPECTED_SPEAKERS" ]] && form+=(-F "expected_speakers=$EXPECTED_SPEAKERS")
++    local job_id=""
++    if ! job_id=$(api_curl -X POST "${form[@]}" "$VOICEHUB_URL/jobs/transcribe" | json_field job_id) \
++        || [[ -z "$job_id" ]]; then
++      log "Upload fehlgeschlagen -- Datei bleibt in pending/ fuer den naechsten Lauf."
++      open=$((open + 1))
++      continue
++    fi
++    log "Job $job_id angenommen, warte auf Ergebnis…"
++    local deadline=$(( $(date +%s) + JOB_TIMEOUT_SECONDS ))
++    local status=""
++    while (( $(date +%s) < deadline )); do
++      sleep 5
++      status=$(api_curl "$VOICEHUB_URL/jobs/$job_id" | json_field status) || status=""
++      [[ "$status" == "done" || "$status" == "failed" ]] && break
++    done
++    case "$status" in
++      done)
++        mv "$file" "$DONE_DIR/"
++        uploaded=$((uploaded + 1))
++        log "Job $job_id fertig; Audio nach done/ (Aufbewahrung $RETENTION_DAYS Tage)."
++        ;;
++      failed)
++        mv "$file" "$FAILED_DIR/"
++        open=$((open + 1))
++        log "Job $job_id fehlgeschlagen; Audio nach failed/ zur Pruefung verschoben."
++        ;;
++      *)
++        open=$((open + 1))
++        log "Job $job_id ohne Ergebnis (Status '$status') -- Datei bleibt in pending/."
++        ;;
++    esac
++  done
++  find "$DONE_DIR" -type f -mtime +"$RETENTION_DAYS" -delete 2>/dev/null || true
++  log "Flush fertig: $uploaded verarbeitet, $open offen."
++  [[ "$open" -eq 0 ]]
++}
++
++cmd_status() {
++  ensure_dirs
++  if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
++    log "Aufnahme laeuft (PID $(cat "$PID_FILE"))."
++  else
++    log "Keine laufende Aufnahme."
++  fi
++  log "pending: $(find "$PENDING_DIR" -type f | wc -l) · done: $(find "$DONE_DIR" -type f | wc -l) · failed: $(find "$FAILED_DIR" -type f | wc -l)"
++}
++
++case "${1:-}" in
++  run) cmd_run ;;
++  stop) cmd_stop ;;
++  flush) cmd_flush ;;
++  status) cmd_status ;;
++  *)
++    cat >&2 <<'USAGE'
++Nutzung: voicehub-jabra.sh {run|stop|flush|status}
++  run     Aufnahme starten (Vordergrund; Stopp per SIGTERM/systemctl stop)
++  stop    Laufende Aufnahme sauber beenden
++  flush   Warteschlange zu VoiceHub hochladen (idempotent, retry-sicher)
++  status  Aufnahme- und Warteschlangen-Zustand anzeigen
++USAGE
++    exit 2
++    ;;
++esac
+diff --git a/scripts/pi-jabra/voicehub-pi.env.example b/scripts/pi-jabra/voicehub-pi.env.example
+new file mode 100644
+index 0000000..84dbb4e
+--- /dev/null
++++ b/scripts/pi-jabra/voicehub-pi.env.example
+@@ -0,0 +1,26 @@
++# VoiceHub Pi/Jabra-Knoten -- Konfiguration.
++# Nach /etc/voicehub-pi.env kopieren und mit chmod 0600 schuetzen.
++# Kein Token, kein Secret in dieses Repo committen.
++
++# Upload-Ziel: der produktive Pi-Pfad aus dem Runbook (Erik-Apache-Proxy).
++VOICEHUB_URL=https://erik/voicehub-api
++
++# Optionaler Maschinen-Token (wird als X-VoiceHub-Api-Token gesendet).
++#VOICEHUB_API_TOKEN=
++
++# Jabra Speak2 75 als ALSA-Geraet; plughw resampled auf 16 kHz mono.
++ALSA_DEVICE=plughw:J75,0
++
++# Warteschlange und Ablage.
++SPOOL_DIR=/var/lib/voicehub-pi
++
++# Diarisierung nur anfordern, wenn das Meeting-Gate es verlangt.
++DIARIZE=false
++#EXPECTED_SPEAKERS=
++
++# TLS: einen echten Zertifikatsnamen verwenden; falls Erik intern mit
++# eigener CA laeuft, hier den CA-Pfad angeben statt jemals -k zu nutzen.
++#CURL_OPTS=--cacert /etc/ssl/certs/erik-ca.pem
++
++JOB_TIMEOUT_SECONDS=900
++RETENTION_DAYS=7
+-- 
+2.43.0
+
