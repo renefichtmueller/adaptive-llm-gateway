@@ -4,11 +4,15 @@ Projekt-Konventionen für Claude-Sessions in diesem Repository.
 
 ## Arbeitskonventionen (Rene)
 
-- **"Bitte aufs Paper pro"** bedeutet: Das Dokument als PDF im 4:3-Format
-  (594×792 pt hoch bzw. 792×594 pt quer — reMarkable Paper Pro) erzeugen und
-  in **Dropbox** unter `Laufende Projekte/Paper pro/` ablegen. Rene importiert
-  es von dort über die Dropbox-Integration des reMarkable. Existiert der
-  Ordner noch nicht, anlegen. Ist der Dropbox-Connector in der Session nicht
+- Der Dropbox-Ordner **"Paper pro"** (unter `Laufende Projekte/`) ist die
+  zentrale Ablage fürs reMarkable Paper Pro: Dort können auf Zuruf **alle**
+  Arten von Dokumenten abgelegt werden — immer dann, wenn Rene es sagt
+  (z. B. **"bitte aufs Paper pro"**). Rene importiert von dort über die
+  Dropbox-Integration des reMarkable.
+- Vorgehen: Dokument als PDF im 4:3-Format erzeugen (594×792 pt hoch bzw.
+  792×594 pt quer), den bestehenden Ordner per Suche/Listing finden (nicht
+  blind neu anlegen; nur erstellen, falls wirklich nicht vorhanden) und die
+  Datei dort ablegen. Ist der Dropbox-Connector in der Session nicht
   verfügbar, die Datei zusätzlich im Chat übergeben und darauf hinweisen.
 - PDFs für das Paper Pro: Vektor statt Raster, kräftige Kontraste (E-Ink),
   Basisschriften oder eingebettete Subsets.
