@@ -67,7 +67,7 @@ jobs:
           -w packages/codex-lsp-adapter
       - name: Run vitest (gateway)
         working-directory: packages/gateway
-        run: npm test || echo "Known failing gateway suites — soft pass until fixed"
+        run: npm test
 
   build-drift:
     name: Build-drift guard

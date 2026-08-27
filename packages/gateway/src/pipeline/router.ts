@@ -22,15 +22,23 @@ export interface RoutingRule {
 }
 
 export interface ModelConfig {
-  tier: 'fast' | 'medium' | 'large';
+  tier: 'fast' | 'medium' | 'large' | 'reasoning';
   context_length: number;
-  strengths: string[];
-  max_tokens_default: number;
+  strengths?: string[];
+  max_tokens_default?: number;
+  provider?: string;
+  description?: string;
+}
+
+export interface TierConfig {
+  timeout_ms: number;
+  error_threshold_percent: number;
+  circuit_breaker_reset_ms: number;
 }
 
 export interface ModelsYaml {
   ollama_base_url: string;
-  tiers: Record<string, { timeout_ms: number; error_threshold_percent: number; circuit_breaker_reset_ms: number }>;
+  tiers: Record<string, TierConfig>;
   models: Record<string, ModelConfig>;
   fallback_chains: Record<string, string[]>;
   tier_fallback: Record<string, string | null>;
@@ -39,6 +47,70 @@ export interface ModelsYaml {
 export interface RoutingRulesYaml {
   routing_rules: Record<string, RoutingRule>;
   validators: Record<string, Record<string, unknown>>;
+}
+
+// ─── Config normalization ───────────────────────────────────────────────────
+// The shipped YAML files use a compact, user-facing format (`rules:` entries
+// with just model/tier/prompt_template). The router normalizes either that
+// format or the fully explicit one into the internal schema, so hand-edited
+// configs and learning-optimizer output both keep working.
+
+const DEFAULT_TIERS: Record<string, TierConfig> = {
+  fast: { timeout_ms: 30_000, error_threshold_percent: 50, circuit_breaker_reset_ms: 30_000 },
+  medium: { timeout_ms: 60_000, error_threshold_percent: 50, circuit_breaker_reset_ms: 60_000 },
+  large: { timeout_ms: 180_000, error_threshold_percent: 50, circuit_breaker_reset_ms: 60_000 },
+};
+
+const DEFAULT_MAX_TOKENS: Record<string, number> = {
+  fast: 1024,
+  medium: 2048,
+  large: 4096,
+};
+
+function normalizeTier(tier: unknown): 'fast' | 'medium' | 'large' {
+  // 'reasoning' models run with large-tier budgets.
+  if (tier === 'fast' || tier === 'medium') return tier;
+  return 'large';
+}
+
+function normalizeModels(raw: Record<string, unknown>): ModelsYaml {
+  const legacyDefaults = (raw['defaults'] as { fallback_chain?: Record<string, string[]> } | undefined);
+  return {
+    ollama_base_url: (raw['ollama_base_url'] as string) ?? 'http://localhost:11434',
+    tiers: { ...DEFAULT_TIERS, ...((raw['tiers'] as Record<string, TierConfig>) ?? {}) },
+    models: (raw['models'] as Record<string, ModelConfig>) ?? {},
+    fallback_chains:
+      (raw['fallback_chains'] as Record<string, string[]>)
+      ?? legacyDefaults?.fallback_chain
+      ?? {},
+    tier_fallback: (raw['tier_fallback'] as Record<string, string | null>) ?? {},
+  };
+}
+
+function normalizeRoutingRules(raw: Record<string, unknown>): RoutingRulesYaml {
+  const source = (raw['routing_rules'] ?? raw['rules'] ?? {}) as Record<string, Partial<RoutingRule>>;
+  const rules: Record<string, RoutingRule> = {};
+
+  for (const [taskType, entry] of Object.entries(source)) {
+    if (!entry || typeof entry !== 'object' || !entry.model) continue;
+    const tier = normalizeTier(entry.tier);
+    rules[taskType] = {
+      model: entry.model,
+      tier,
+      prompt_template: entry.prompt_template ?? 'default',
+      temperature: entry.temperature ?? 0.7,
+      max_tokens: entry.max_tokens ?? DEFAULT_MAX_TOKENS[tier]!,
+      output_format: entry.output_format ?? 'text',
+      requires_fact_check: entry.requires_fact_check ?? false,
+      validators: entry.validators ?? [],
+      callers: entry.callers ?? ['all'],
+    };
+  }
+
+  return {
+    routing_rules: rules,
+    validators: (raw['validators'] as Record<string, Record<string, unknown>>) ?? {},
+  };
 }
 
 export interface RouterDecision {
@@ -64,7 +136,7 @@ function loadModels(): ModelsYaml {
   if (modelsConfig) return modelsConfig;
   try {
     const raw = readFileSync(join(CONFIG_DIR, 'models.yaml'), 'utf-8');
-    modelsConfig = yaml.load(raw) as ModelsYaml;
+    modelsConfig = normalizeModels((yaml.load(raw) ?? {}) as Record<string, unknown>);
     return modelsConfig;
   } catch (err) {
     logger.error({ err }, 'Failed to load models.yaml');
@@ -76,7 +148,7 @@ function loadRoutingRules(): RoutingRulesYaml {
   if (routingConfig) return routingConfig;
   try {
     const raw = readFileSync(join(CONFIG_DIR, 'routing-rules.yaml'), 'utf-8');
-    routingConfig = yaml.load(raw) as RoutingRulesYaml;
+    routingConfig = normalizeRoutingRules((yaml.load(raw) ?? {}) as Record<string, unknown>);
     return routingConfig;
   } catch (err) {
     logger.error({ err }, 'Failed to load routing-rules.yaml');
@@ -168,7 +240,8 @@ function buildDecision(
 export function getModelTier(model: string): 'fast' | 'medium' | 'large' {
   const models = loadModels();
   const config = models.models[model];
-  return config?.tier ?? 'medium';
+  if (!config) return 'medium';
+  return normalizeTier(config.tier);
 }
 
 export function getOllamaBaseUrl(): string {
@@ -223,7 +296,11 @@ function buildScoredFallbackChain(
   models: ModelsYaml,
 ): string[] {
   if (tier === 'reasoning' || tier === 'code_generation') {
-    return [selectedModel, ...buildFallbackChain(selectedModel, configTier, models).filter((m) => m !== selectedModel)];
+    // Prefer a dedicated chain for the scorer tier (e.g. strong local coder
+    // models for code_generation); fall back to the config-tier chain.
+    const scorerChain = models.fallback_chains[tier];
+    const chain = scorerChain ?? models.fallback_chains[configTier] ?? [];
+    return [selectedModel, ...chain.filter((m) => m !== selectedModel)];
   }
   return buildFallbackChain(selectedModel, configTier, models);
 }
