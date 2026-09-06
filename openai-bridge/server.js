@@ -3,7 +3,7 @@ import { createServer } from 'http'
 import { promisify } from 'util'
 
 const exec = promisify(execFile)
-const PORT = process.env.OPENAI_BRIDGE_PORT || 0
+const PORT = process.env.OPENAI_BRIDGE_PORT || 8790
 const API_KEY = process.env.OPENAI_API_KEY
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4-turbo'
 

@@ -57,7 +57,7 @@ export async function initPgBoss(): Promise<void> {
     retryBackoff: true,
   });
 
-  await (boss as unknown as { work: Function }).work(
+  await (boss as unknown as { work: (name: string, options: { concurrency: number }, handler: typeof processJob) => Promise<string> }).work(
     QUEUE_NAME,
     { concurrency: CONCURRENCY },
     processJob,
@@ -71,7 +71,7 @@ async function processJob(job: PgBoss.Job<BatchJobData>): Promise<void> {
   logger.info({ jobId: job.id, caller, taskCount: tasks.length }, 'Processing batch job');
 
   const results: TaskResult[] = [];
-  const GATEWAY_URL = `http://localhost:${process.env['PORT'] ?? '0000'}`;
+  const GATEWAY_URL = `http://localhost:${process.env['PORT'] ?? '8787'}`;
 
   for (const task of tasks) {
     try {

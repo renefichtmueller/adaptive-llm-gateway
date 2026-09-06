@@ -5,7 +5,7 @@
 
 import { logger } from './observability/logger.js';
 
-const GATEWAY_URL = process.env['GATEWAY_URL'] ?? 'http://localhost:0000';
+const GATEWAY_URL = process.env['GATEWAY_URL'] ?? 'http://localhost:8787';
 const INTERNAL_SECRET = process.env['INTERNAL_SECRET'] ?? 'internal-learning-secret';
 
 export interface GatewayCallOptions {

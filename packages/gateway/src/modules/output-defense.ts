@@ -132,9 +132,7 @@ export async function* guardOutputStream(
   }
   const windowChars = opts.windowChars ?? 2000;
   let buffer = '';
-  let cut = false;
   for await (const chunk of source) {
-    if (cut) break;
     buffer += chunk;
     // Keep only the last `windowChars` for scanning to limit memory
     const scanText = buffer.slice(-windowChars);
@@ -149,7 +147,6 @@ export async function* guardOutputStream(
         }
         yield REDACTED_NOTICE;
         logger.warn({ matches: result.matches, score: result.score }, 'Output-defense cut stream');
-        cut = true;
         break;
       } else {
         // tag mode: pass through but log

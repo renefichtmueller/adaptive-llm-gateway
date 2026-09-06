@@ -18,7 +18,7 @@ npm install @llm-gateway/claude-code-bridge
 import { ClaudeCodeBridge } from '@llm-gateway/claude-code-bridge'
 
 const bridge = new ClaudeCodeBridge({
-  gatewayUrl: 'http://localhost:0000',
+  gatewayUrl: 'http://localhost:8787',
   agentId: 'claude-code-ide',
   ideVersion: '1.0.0',
   extensionVersion: '1.0.0',
