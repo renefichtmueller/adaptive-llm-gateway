@@ -186,6 +186,39 @@ Die vollständige Testsuite, ESLint und der Produktionsbuild des
 Zielprojekts wurden **nicht** ausgeführt — dafür fehlt hier der Checkout
 mit Abhängigkeiten. Das gehört vor den Rollout.
 
+## Produktionsstand am 08.09.2026 (nachgemessen)
+
+Gegen die Live-Seite geprüft, nachdem gemeldet wurde, dass das Problem
+weiterhin besteht:
+
+- `https://trips.fichtmueller.org/sw.js` ist mit
+  `b5eeb93f0ff1b8f33e95423c30ad56934736282cd2008f379576b49e1260fd56`
+  **byte-identisch zu `dbc40334`**, meldet `pulse-v19` und enthält kein
+  `QUEUE_MAX_ATTEMPTS`. Die Patch-Serie aus diesem Verzeichnis ist also
+  nicht ausgerollt.
+- `GET /api/planner/destination-image?city=Nairobi&country=KE` liefert
+  **401** statt eines Bildes. Die Middleware-Ausnahme aus `9c14cfb4` fehlt,
+  der Bildfix ist ebenfalls nicht ausgerollt.
+
+Beides zusammen: In Produktion läuft unverändert `dbc40334`. Solange
+niemand Cherry-Pick, `git am`, Build und Erik-Cutover ausführt, ändert
+sich an beiden Symptomen nichts.
+
+### Nach dem Rollout so verifizieren
+
+```bash
+# Bild-Route muss öffentlich ein Bild liefern, nicht 401
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
+  'https://trips.fichtmueller.org/api/planner/destination-image?city=Nairobi&country=KE'
+# erwartet: 200 image/jpeg  (oder image/svg+xml als Fallback)
+
+# Service Worker muss die neue Queue-Logik tragen
+curl -s https://trips.fichtmueller.org/sw.js | grep -c QUEUE_MAX_ATTEMPTS
+# erwartet: 1   (und pulse-v20 statt pulse-v19)
+```
+
+Danach die PWA einmal vollständig schließen und neu öffnen.
+
 ## Bewusst nicht enthalten
 
 Der eigentliche Auslöser hinter Problem 1 — dass produktiv aus wechselnden
