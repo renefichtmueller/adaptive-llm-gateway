@@ -1,5 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { LLMGatewayClient, createTIPClient, createEOPulseClient } from '@llm-gateway/client';
+import { describe, it, expect, beforeAll } from 'vitest';
+import {
+  LLMGatewayClient,
+  TIPClient,
+  createTIPClient,
+  createInteractiveClient,
+  createBatchClient,
+  createRealtimeClient,
+} from '@llm-gateway/client';
 
 /**
  * Integration test: Claude Code agent using LLM Gateway
@@ -7,22 +14,33 @@ import { LLMGatewayClient, createTIPClient, createEOPulseClient } from '@llm-gat
  * This test demonstrates how the Claude Code agent (or any other AI agent)
  * would consume the Gateway's completion and classification endpoints.
  *
- * Real usage: Claude Code would instantiate createClaudeCodeClient() and
- * call client.completion() for each generation/analysis task.
+ * The live suites only run when a gateway is reachable (set LLM_GATEWAY_URL
+ * or run one on localhost:8787); otherwise they are skipped so `npm test`
+ * stays green without infrastructure. The client-construction suites at the
+ * bottom always run.
  */
 
-describe('Claude Code Integration with LLM Gateway', () => {
+const gatewayUrl = process.env['LLM_GATEWAY_URL'] ?? 'http://localhost:8787';
+
+async function gatewayReachable(): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2_000);
+    const res = await fetch(`${gatewayUrl}/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+const gatewayUp = await gatewayReachable();
+
+describe.skipIf(!gatewayUp)('Claude Code Integration with LLM Gateway (live)', () => {
   let client: LLMGatewayClient;
-  let gatewayUrl: string;
 
   beforeAll(() => {
-    // Gateway must be running on localhost:0 for these tests
-    gatewayUrl = process.env['LLM_GATEWAY_URL'] ?? 'http://localhost:0000';
     client = new LLMGatewayClient({ caller: 'claude-code', baseUrl: gatewayUrl, timeout: 30_000 });
-  });
-
-  afterAll(() => {
-    // Cleanup: nothing to do for HTTP client
   });
 
   describe('Health checks', () => {
@@ -104,45 +122,19 @@ describe('Claude Code Integration with LLM Gateway', () => {
     });
   });
 
-  describe('Offline fallback behavior', () => {
-    it('should gracefully degrade if gateway is unavailable', async () => {
-      // Create a client pointing to an unreachable gateway
-      const offlineClient = new LLMGatewayClient({
-        caller: 'claude-code',
-        baseUrl: 'http://localhost:9999', // non-existent
-        ollamaUrl: 'http://localhost:11434', // fallback to local Ollama
-        timeout: 2_000,
+  describe('TIP agent protocol (ADR-0005)', () => {
+    it('should serve prompt-oriented agent completions', async () => {
+      const tipClient = createTIPClient({ agentId: 'claude-code', gatewayUrl });
+      const result = await tipClient.completion('Explain what a mutex is in one sentence.', {
+        maxTokens: 200,
       });
 
-      try {
-        // This should fall back to local Ollama
-        const result = await offlineClient.completion({
-          task_type: 'fallback_test',
-          input: 'This request should use local Ollama',
-        });
-
-        expect(result.status).toBe('approved');
-        expect(result.model).toMatch(/qwen|llama/);
-      } catch (err) {
-        // If Ollama is also unavailable, that's ok for this test
-        expect(err).toBeDefined();
-      }
-    });
-
-    it('should retry Ollama on transient failures', async () => {
-      const client2 = new LLMGatewayClient({
-        caller: 'claude-code',
-        baseUrl: 'http://localhost:0000',
-        ollamaUrl: 'http://localhost:11434',
-        timeout: 30_000,
-      });
-
-      const result = await client2.completion({
-        task_type: 'retry_test',
-        input: 'Testing retry logic',
-      });
-
-      expect(result).toBeDefined();
+      expect(result.text.length).toBeGreaterThan(0);
+      expect(result.confidence).toBeGreaterThanOrEqual(0);
+      expect(result.confidence).toBeLessThanOrEqual(1);
+      expect(typeof result.fallback).toBe('boolean');
+      expect(result.tokens).toHaveProperty('input');
+      expect(result.tokens).toHaveProperty('output');
     });
   });
 
@@ -177,38 +169,40 @@ describe('Claude Code Integration with LLM Gateway', () => {
       expect(result.latency_ms).toBeLessThan(60_000); // Should complete in <1 min
     });
   });
+});
 
-  describe('Project-specific clients', () => {
-    it('should create a client with custom timeout', async () => {
-      const tipClient = createTIPClient(gatewayUrl);
-      const status = (tipClient as any).timeout; // Access private timeout for testing
-      expect(status).toBeDefined();
-    });
-
-    it('should create EO Pulse client with appropriate timeout', async () => {
-      const eoPulseClient = createEOPulseClient(gatewayUrl);
-      const status = (eoPulseClient as any).timeout;
-      expect(status).toBeDefined();
-    });
+describe('Client construction (no gateway required)', () => {
+  it('should create a TIP client from an ADR-0005 config object', () => {
+    const tipClient = createTIPClient({ agentId: 'claude-code', gatewayUrl });
+    expect(tipClient).toBeInstanceOf(TIPClient);
+    expect(tipClient.agentId).toBe('claude-code');
+    expect(tipClient.getStatus().mode).toBe('gateway');
   });
 
-  describe('Error handling', () => {
-    it('should provide meaningful error messages', async () => {
-      try {
-        const badClient = new LLMGatewayClient({
-          caller: 'claude-code',
-          baseUrl: 'http://invalid-domain-that-does-not-exist.localhost',
-          timeout: 2_000,
-        });
-
-        await badClient.completion({
-          task_type: 'error_test',
-          input: 'This will fail',
-        });
-      } catch (err) {
-        expect(err).toBeInstanceOf(Error);
-        expect((err as Error).message).toMatch(/unavailable|failed|timeout/i);
-      }
-    });
+  it('should create a TIP client from a legacy URL string', () => {
+    const tipClient = createTIPClient(gatewayUrl);
+    expect(tipClient).toBeInstanceOf(TIPClient);
+    expect(tipClient.agentId).toBe('tip');
   });
+
+  it('should create pre-configured task clients', () => {
+    for (const factory of [createInteractiveClient, createBatchClient, createRealtimeClient]) {
+      const taskClient = factory('claude-code', gatewayUrl);
+      expect(taskClient).toBeInstanceOf(LLMGatewayClient);
+      expect(taskClient.getStatus()).toHaveProperty('mode');
+    }
+  });
+
+  it('should provide meaningful error messages when everything is unreachable', async () => {
+    const badClient = new LLMGatewayClient({
+      caller: 'claude-code',
+      baseUrl: 'http://localhost:1', // closed port
+      ollamaUrl: 'http://localhost:1',
+      timeout: 1_000,
+    });
+
+    await expect(
+      badClient.completion({ task_type: 'error_test', input: 'This will fail' }),
+    ).rejects.toThrow(/unavailable|failed|timeout|fetch/i);
+  }, 30_000);
 });

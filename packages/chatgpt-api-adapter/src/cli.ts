@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import ChatGPTAPIAdapter from './index'
+import ChatGPTAPIAdapter, { DEFAULT_PORT } from './index.js'
 
-const port = parseInt(process.env.CHATGPT_API_PORT || '0', 10)
+const port = parseInt(process.env.CHATGPT_API_PORT || String(DEFAULT_PORT), 10)
 const adapter = new ChatGPTAPIAdapter(port)
 
 adapter.start().catch(error => {

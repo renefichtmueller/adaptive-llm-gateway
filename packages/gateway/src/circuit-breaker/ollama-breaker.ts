@@ -28,7 +28,7 @@ const TIER_OPTIONS: Record<ModelTier, TierOptions> = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const breakerRegistry = new Map<string, CircuitBreaker<any[], any>>();
 
 type AsyncFn<A extends unknown[], R> = (...args: A) => Promise<R>;

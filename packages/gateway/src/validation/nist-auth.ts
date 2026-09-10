@@ -14,7 +14,14 @@
 import crypto from 'crypto';
 import { promisify } from 'util';
 
-const scrypt = promisify(crypto.scrypt);
+// promisify() collapses crypto.scrypt to its 3-argument overload; retype it
+// so the NIST cost parameters (N, r, p) stay expressible.
+const scrypt = promisify(crypto.scrypt) as (
+  password: crypto.BinaryLike,
+  salt: crypto.BinaryLike,
+  keylen: number,
+  options: crypto.ScryptOptions,
+) => Promise<Buffer>;
 
 export interface PasswordHashResult {
   hash: string;
@@ -122,7 +129,7 @@ export async function hashPassword(password: string): Promise<PasswordHashResult
       salt: salt.toString('hex')
     };
   } catch (error) {
-    throw new Error(`Password hashing failed: ${error}`);
+    throw new Error(`Password hashing failed: ${error}`, { cause: error });
   }
 }
 

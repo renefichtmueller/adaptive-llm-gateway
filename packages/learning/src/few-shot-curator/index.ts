@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, resolve } from 'path';
 import yaml from 'js-yaml';
-import { query, withTransaction } from '../db/client.js';
+import { query } from '../db/client.js';
 import { logger } from '../observability/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -169,6 +169,7 @@ interface HighConfOutput {
 
 interface RejectedOutput {
   id: string;
+  call_id: string | null;
   task_type: string;
   input_text: string;
   output_text: string;
@@ -220,9 +221,30 @@ export async function runFewShotCurator(): Promise<void> {
   const allHighConf = [...highConfResult.rows, ...directHighConfResult.rows];
   logger.info({ count: allHighConf.length }, 'Pulled high-confidence outputs');
 
+  // Feed the fine-tuning corpus: every high-confidence pair with a real
+  // input becomes a training example (deduped per llm_call).
+  let corpusAdded = 0;
+  for (const output of allHighConf) {
+    if (!output.input_text) continue;
+    try {
+      const inserted = await query(
+        `INSERT INTO learning_corpus (call_id, task_type, prompt_text, completion_text, quality_score)
+         SELECT $1::uuid, $2, $3, $4, $5
+         WHERE NOT EXISTS (SELECT 1 FROM learning_corpus WHERE call_id = $1::uuid)`,
+        [output.id, output.task_type, output.input_text, output.output_text, output.confidence],
+      );
+      corpusAdded += inserted.rowCount ?? 0;
+    } catch (err) {
+      logger.warn({ err, callId: output.id }, 'Failed to add example to learning corpus');
+    }
+  }
+  if (corpusAdded > 0) {
+    logger.info({ corpusAdded }, 'Added training examples to learning_corpus');
+  }
+
   // 2. Pull rejected outputs for negative examples
   const rejectedResult = await query<RejectedOutput>(
-    `SELECT rq.id, rq.task_type, rq.input_text, rq.output_text, rq.reviewer_notes
+    `SELECT rq.id, rq.call_id, rq.task_type, rq.input_text, rq.output_text, rq.reviewer_notes
      FROM review_queue rq
      WHERE rq.decision = 'rejected'
        AND rq.reviewed_at > now() - interval '7 days'
@@ -350,14 +372,16 @@ export async function runFewShotCurator(): Promise<void> {
       `Added negative example from review_queue rejection`,
     );
 
-    // Store in few_shot_candidates as negative
+    // Store in few_shot_candidates as negative. llm_call_id is carried so
+    // the dedup check above recognizes already-processed rejections.
     await query(
       `INSERT INTO few_shot_candidates
-         (task_type, input_text, output_text, confidence, is_negative, negative_reason, promoted, promoted_at, template_version)
-       VALUES ($1, $2, $3, 0, true, $4, true, now(), $5)
+         (task_type, llm_call_id, input_text, output_text, confidence, is_negative, negative_reason, promoted, promoted_at, template_version)
+       VALUES ($1, $2, $3, $4, 0, true, $5, true, now(), $6)
        ON CONFLICT DO NOTHING`,
       [
         rejected.task_type,
+        rejected.call_id,
         rejected.input_text,
         rejected.output_text,
         rejected.reviewer_notes ?? 'rejected',

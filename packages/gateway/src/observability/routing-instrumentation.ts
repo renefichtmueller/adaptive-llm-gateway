@@ -55,15 +55,10 @@ export async function trackFallbackChain(
   results: Array<{ model: string; response?: OllamaResponse; error?: Error; latencyMs: number }>,
 ): Promise<void> {
   let fallbackStep = 0;
-  let lastSuccessIndex = -1;
 
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
     const isSuccess = !!result.response;
-
-    if (isSuccess) {
-      lastSuccessIndex = i;
-    }
 
     if (i > 0) {
       fallbackStep++;

@@ -1,5 +1,4 @@
-import { sql } from 'postgres'
-import { Client } from 'postgres'
+import type { Sql } from 'postgres'
 
 export interface AgentMetrics {
   agentId: string
@@ -47,9 +46,9 @@ export interface PerAgentConfidence {
 }
 
 export class LearningIntegration {
-  private db: Client
+  private db: Sql
 
-  constructor(dbConnection: Client) {
+  constructor(dbConnection: Sql) {
     this.db = dbConnection
   }
 
@@ -65,27 +64,38 @@ export class LearningIntegration {
         confidence DECIMAL(3, 2) NOT NULL,
         fallback_used BOOLEAN NOT NULL DEFAULT FALSE,
         success BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        INDEX idx_agent_model (agent_id, model),
-        INDEX idx_created (created_at)
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
+    `
+    await this.db`
+      CREATE INDEX IF NOT EXISTS idx_request_log_agent_model
+        ON agent_request_log (agent_id, model)
+    `
+    await this.db`
+      CREATE INDEX IF NOT EXISTS idx_request_log_created
+        ON agent_request_log (created_at)
     `
 
     await this.db`
       CREATE TABLE IF NOT EXISTS agent_feedback (
         id SERIAL PRIMARY KEY,
-        request_id UUID NOT NULL,
+        request_id UUID NOT NULL REFERENCES agent_request_log (request_id),
         agent_id VARCHAR(64) NOT NULL,
         outcome VARCHAR(32) NOT NULL,
         completion_quality SMALLINT,
         latency_ms INTEGER,
         token_count INTEGER,
         metadata JSONB,
-        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        FOREIGN KEY (request_id) REFERENCES agent_request_log (request_id),
-        INDEX idx_agent_outcome (agent_id, outcome),
-        INDEX idx_created (created_at)
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
+    `
+    await this.db`
+      CREATE INDEX IF NOT EXISTS idx_feedback_agent_outcome
+        ON agent_feedback (agent_id, outcome)
+    `
+    await this.db`
+      CREATE INDEX IF NOT EXISTS idx_feedback_created
+        ON agent_feedback (created_at)
     `
 
     await this.db`
@@ -97,9 +107,12 @@ export class LearningIntegration {
         sample_size INTEGER NOT NULL DEFAULT 0,
         trend VARCHAR(16) NOT NULL DEFAULT 'stable',
         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        UNIQUE (agent_id, model),
-        INDEX idx_agent (agent_id)
+        UNIQUE (agent_id, model)
       )
+    `
+    await this.db`
+      CREATE INDEX IF NOT EXISTS idx_confidence_agent
+        ON agent_confidence_scores (agent_id)
     `
   }
 
@@ -123,8 +136,8 @@ export class LearningIntegration {
         token_count, metadata
       ) VALUES (
         ${feedback.requestId}, ${feedback.agentId}, ${feedback.outcome},
-        ${feedback.completionQuality || null}, ${feedback.latencyMs || null},
-        ${feedback.tokenCount || null}, ${JSON.stringify(feedback.metadata || {})}
+        ${feedback.completionQuality ?? null}, ${feedback.latencyMs ?? null},
+        ${feedback.tokenCount ?? null}, ${JSON.stringify(feedback.metadata ?? {})}
       )
     `
   }
