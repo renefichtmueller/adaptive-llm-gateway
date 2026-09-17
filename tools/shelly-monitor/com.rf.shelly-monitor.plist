@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.rf.shelly-monitor</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>REPLACE_WITH_PATH/shelly-monitor.py</string>
+  </array>
+
+  <!-- Alle 5 Minuten. Bei 12 Geraeten dauert ein Lauf ca. 10 s. -->
+  <key>StartInterval</key>
+  <integer>300</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/shelly-monitor.out</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/shelly-monitor.err</string>
+
+  <!-- Nicht laufen, wenn der Mac im Energiesparen ist: verhindert Fehlalarme,
+       weil das WLAN-Interface dann schlaeft. -->
+  <key>LowPriorityIO</key>
+  <true/>
+</dict>
+</plist>
