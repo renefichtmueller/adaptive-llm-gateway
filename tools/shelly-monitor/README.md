@@ -5,25 +5,98 @@
 
 # shelly-monitor
 
-Meldet, wenn ein Shelly aus dem Netz faellt — statt dass es Wochen spaeter
-beim Lichtanschalten auffaellt.
+Vier Werkzeuge, damit kein Shelly mehr unbemerkt aus dem Netz faellt.
 
-Fuehrt Geraete ueber die **MAC**, nicht die IP. Ein Shelly mit neuer DHCP-Adresse
-gilt damit nicht als verschwunden; nur ein Geraet, das gar nicht mehr antwortet,
-loest Alarm aus.
+| Werkzeug | Zweck |
+|---|---|
+| `shelly-monitor.py` | Inventar, Erreichbarkeit, Alarm bei Ausfall |
+| `shelly-audit.py`   | liest WLAN-Konfiguration, benennt Ausfallursachen |
+| `shelly-setip.py`   | setzt feste IPs, damit alle in einem Adressblock liegen |
+| `shelly-mqtt.py`    | schaltet MQTT ein und richtet es auf einen Broker aus |
+
+Alle schreibenden Werkzeuge laufen ohne `--apply` als Trockenlauf.
 
 ## Installation (Mac Studio)
 
 ```bash
-mkdir -p ~/bin && cp shelly-monitor.py ~/bin/ && chmod +x ~/bin/shelly-monitor.py
-~/bin/shelly-monitor.py            # erster Lauf, legt ~/.shelly-monitor an
+mkdir -p ~/bin && cp shelly-*.py ~/bin/ && chmod +x ~/bin/shelly-*.py
+~/bin/shelly-monitor.py
 
 sed "s|REPLACE_WITH_PATH|$HOME/bin|" com.rf.shelly-monitor.plist \
   > ~/Library/LaunchAgents/com.rf.shelly-monitor.plist
 launchctl load ~/Library/LaunchAgents/com.rf.shelly-monitor.plist
 ```
 
-Prüfen: `~/bin/shelly-monitor.py --status`
+## Konfiguration
+
+`~/.shelly-monitor/config.json`, alles optional:
+
+```json
+{
+  "password": "<Geraete-Passwort fuer Shellys mit auth_en>",
+  "ip_block": [40, 69],
+  "subnets": ["192.168.178"],
+  "webhook": "https://…",
+  "mqtt": { "user": "…", "pass": "…" }
+}
+```
+
+## Der Adressblock
+
+Shellys sollen in **192.168.178.40–69** liegen, damit man sie am Netzplan
+erkennt. `shelly-monitor.py` markiert jedes Geraet ausserhalb.
+
+`plan.json` enthaelt die vier noch offenen Umzuege:
+
+```bash
+~/bin/shelly-setip.py --plan plan.json            # zeigt nur an
+~/bin/shelly-setip.py --plan plan.json --apply    # fuehrt aus
+```
+
+Der ruhigere Weg ist eine **DHCP-Reservierung in der Fritzbox**
+(*Heimnetz → Netzwerk → Gerät bearbeiten → „Diesem Netzwerkgerät immer die
+gleiche IPv4-Adresse zuweisen"*). Ein Tippfehler kostet dort einen zweiten
+Versuch statt eines Werksresets. `shelly-setip.py` ist fuer Geraete gedacht,
+die bereits statisch konfiguriert sind und deshalb keine Reservierung annehmen.
+
+## Zugriff, wenn das WLAN weg ist
+
+Ein Shelly ist ein WLAN-Geraet. Faellt das WLAN aus, ist er ueber IP nicht
+erreichbar — **auch nicht ueber MQTT**, denn der Broker haengt am selben Netz.
+Was trotzdem traegt:
+
+1. **Der Wandschalter.** Solange der Eingang nicht auf `detached` steht,
+   schaltet der Shelly lokal, voellig ohne Netz. Bei `detached` braucht er ein
+   Skript oder eine Szene auf dem Geraet, sonst bleibt das Licht aus.
+   `shelly-audit.py` zeigt den Eingangsmodus.
+2. **Bluetooth.** Gen2/Gen3 sprechen BLE. Der vorhandene BluGw (`B0B21CFABD80`)
+   erreicht die Geraete auch ohne WLAN — der einzige echte Fernzugriff bei
+   Funkausfall.
+3. **Der eigene Access Point des Geraets.** Verliert ein Shelly die
+   WLAN-Verbindung, macht er ein eigenes Netz auf. Damit kommt man per Handy
+   direkt dran. Der AP-Modus sollte deshalb aktiviert bleiben.
+4. **Zweites WLAN (`sta1`).** Gen2+ kann ein Ersatznetz hinterlegen, etwa einen
+   LTE-Router. Faellt die Fritzbox aus, wechseln die Geraete selbsttaetig.
+
+MQTT loest also nicht den Funkausfall, sondern das Abfrageproblem: die Geraete
+melden ihren Zustand von sich aus, der Broker haelt ihn als Retained Message
+vor, und der Monitor muss nicht mehr das ganze Netz abklappern.
+
+```bash
+~/bin/shelly-mqtt.py --broker 192.168.178.82:1883           # zeigt nur an
+~/bin/shelly-mqtt.py --broker 192.168.178.82:1883 --apply
+```
+
+## Wie der Monitor arbeitet
+
+- Probt **jede** Adresse im lokalen /24 direkt per HTTP auf `/shelly`.
+  Bewusst ohne Ping/ARP: `ping -W` ist auf macOS in Millisekunden, ein
+  Ping-Sweep uebersieht damit die Haelfte der Geraete.
+- Fuehrt das Inventar ueber die **MAC**, nicht die IP. Ein Geraet mit neuer
+  DHCP-Adresse gilt so nicht als verschwunden.
+- Alarm erst nach drei Fehlversuchen in Folge (15 Minuten).
+- Bei Ausfall zusaetzlich ein WLAN-Scan nach Shelly-APs. Ein Treffer
+  unterscheidet ein Geraet mit verlorenen Zugangsdaten von einem stromlosen.
 
 ## Dateien
 
@@ -32,17 +105,3 @@ Prüfen: `~/bin/shelly-monitor.py --status`
 | `~/.shelly-monitor/inventory.json` | alle je gesehenen Geraete, `last_seen`, `missing_since` |
 | `~/.shelly-monitor/status.json`    | Kurzstand fuer Dashboards |
 | `~/.shelly-monitor/monitor.log`    | Verlauf: wann weg, wann zurueck |
-| `~/.shelly-monitor/config.json`    | optional: `{"webhook": "...", "subnets": ["192.168.178"]}` |
-
-## Verhalten
-
-- Probt **jede** Adresse im lokalen /24 direkt per HTTP auf `/shelly`.
-  Bewusst ohne Ping/ARP — Geraete, die ICMP verschlucken, wuerden sonst fehlen.
-- Alarm erst nach 3 Fehlversuchen in Folge (15 Min). Ein einzelner WLAN-Haenger
-  meldet sich also nicht.
-- Faellt ein Geraet aus, wird zusaetzlich das WLAN nach Shelly-APs gescannt.
-  Treffer = das Geraet lebt, hat aber seine WLAN-Zugangsdaten verloren.
-- Kommt es zurueck: Entwarnung plus Eintrag im Log.
-
-Die 12 bekannten Geraete (10 online + die 2 vermissten) sind als Erwartung
-vorbelegt, damit Fehlende ab dem ersten Lauf als `FEHLT` erscheinen.

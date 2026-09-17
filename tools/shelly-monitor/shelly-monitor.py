@@ -38,25 +38,30 @@ WORKERS = 64
 # dass ein einzelner WLAN-Haenger eine Meldung ausloest.
 ALERT_AFTER_MISSES = 3
 
-# Stand des Scans vom 25.08.2026. Diese Geraete werden erwartet, auch wenn sie
+# Stand des Scans vom 17.09.2026. Diese Geraete werden erwartet, auch wenn sie
 # beim ersten Lauf nicht antworten — sonst wuerde ein fehlendes Geraet nie
 # auffallen, weil es gar nicht erst ins Inventar kaeme.
 SEED = {
+    "D48AFC59A230": "Esstisch Lampe",
     "E465B8FA5AC8": "Fussbodenheizung Kueche",
     "C4D8D542FA6C": "Dachkasten Haus links",
+    "C4D8D54357C0": "Spots Sitzecke",
     "FCB467277BA8": "Dachkasten Haus rechts",
     "34B7DACA8F14": "Beleuchtung Haus hinten",
+    "A0A3B34EEB2C": "Brunnenpumpe",
     "E86BEAEBA410": "Treppenhaus oben Licht",
     "8CBFEA96FC40": "(2PM G3, unbenannt)",
     "08927254ABF0": "(Plug MG3, unbenannt)",
     "08927254AE10": "(Plug MG3, unbenannt)",
+    "08927254AC68": "(Plug MG3, unbenannt)",
     "E4B063F1DDDC": "(Outdoor Plug SG3, unbenannt)",
+    "B0B21CFABD80": "(BluGw, unbenannt)",
     "08927254CAA8": "(Plug MG3, unbenannt)",
-    # Seit dem Scan vom 25.08.2026 vermisst — vermutlich Wohnzimmer Esstisch + Spots.
-    "C4D8D54357C0": "VERMISST — vermutlich Wohnzimmer (Esstisch/Spots)",
-    "D48AFC59A230": "VERMISST — vermutlich Wohnzimmer (Esstisch/Spots)",
 }
 
+# Alle Shellys sollen in einem zusammenhaengenden Adressblock liegen. Geraete
+# ausserhalb werden markiert, damit Streuung sichtbar bleibt statt einzureissen.
+IP_BLOCK = (40, 69)
 
 def now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -236,13 +241,33 @@ def check():
     save(STATUS, {"checked_at": now(), "online": len(seen),
                   "total": len(inv),
                   "missing": sorted(m for m, e in inv.items()
-                                    if e.get("misses", 0) >= ALERT_AFTER_MISSES)})
+                                    if e.get("misses", 0) >= ALERT_AFTER_MISSES),
+                  "outside_block": sorted(m for m, e in inv.items()
+                                          if outside_block(e.get("ip")))})
     return inv
+
+
+def ip_block():
+    lo, hi = load(CONFIG, {}).get("ip_block", IP_BLOCK)
+    return int(lo), int(hi)
+
+
+def outside_block(ip):
+    """True, wenn die Adresse nicht im vorgesehenen Shelly-Block liegt."""
+    if not ip:
+        return False
+    lo, hi = ip_block()
+    try:
+        return not (lo <= int(ip.rsplit(".", 1)[1]) <= hi)
+    except (ValueError, IndexError):
+        return False
 
 
 def render(inv):
     rows = sorted(inv.items(),
                   key=lambda kv: (kv[1].get("misses", 0) > 0, kv[1].get("ip") or "zz"))
+    lo, hi = ip_block()
+    print(f"Shelly-Block: 192.168.x.{lo}-{hi}")
     print(f"{'STATUS':<9} {'IP':<16} {'MAC':<14} {'NAME'}")
     print("-" * 78)
     for mac, e in rows:
@@ -253,7 +278,8 @@ def render(inv):
             state = "WACKELT"
         else:
             state = "FEHLT"
-        print(f"{state:<9} {(e.get('ip') or '-'):<16} {mac:<14} {e.get('name') or '?'}")
+        flag = "  <- ausserhalb des Shelly-Blocks" if outside_block(e.get("ip")) else ""
+        print(f"{state:<9} {(e.get('ip') or '-'):<16} {mac:<14} {e.get('name') or '?'}{flag}")
         if state == "FEHLT" and e.get("missing_since"):
             print(f"{'':<9} seit {e['missing_since']}")
 
