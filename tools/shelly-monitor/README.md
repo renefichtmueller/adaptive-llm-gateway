@@ -10,7 +10,7 @@ Vier Werkzeuge, damit kein Shelly mehr unbemerkt aus dem Netz faellt.
 | Werkzeug | Zweck |
 |---|---|
 | `shelly-monitor.py` | Inventar, Erreichbarkeit, Alarm bei Ausfall |
-| `shelly-audit.py`   | liest WLAN-Konfiguration, benennt Ausfallursachen |
+| `shelly-audit.py`   | liest die Konfiguration, benennt Ausfallursachen und prueft, was bei Funkausfall traegt |
 | `shelly-setip.py`   | setzt feste IPs, damit alle in einem Adressblock liegen |
 | `shelly-mqtt.py`    | schaltet MQTT ein und richtet es auf einen Broker aus |
 
@@ -68,7 +68,8 @@ Was trotzdem traegt:
 1. **Der Wandschalter.** Solange der Eingang nicht auf `detached` steht,
    schaltet der Shelly lokal, voellig ohne Netz. Bei `detached` braucht er ein
    Skript oder eine Szene auf dem Geraet, sonst bleibt das Licht aus.
-   `shelly-audit.py` zeigt den Eingangsmodus.
+   `shelly-audit.py` zeigt den Eingangsmodus und meldet
+   betroffene Geraete am Ende als "Bei Funkausfall stumm".
 2. **Bluetooth.** Gen2/Gen3 sprechen BLE. Der vorhandene BluGw (`B0B21CFABD80`)
    erreicht die Geraete auch ohne WLAN — der einzige echte Fernzugriff bei
    Funkausfall.
@@ -86,6 +87,17 @@ vor, und der Monitor muss nicht mehr das ganze Netz abklappern.
 ~/bin/shelly-mqtt.py --broker 192.168.178.82:1883           # zeigt nur an
 ~/bin/shelly-mqtt.py --broker 192.168.178.82:1883 --apply
 ```
+
+### Pruefen, was ohne WLAN traegt
+
+```bash
+~/bin/shelly-audit.py
+```
+
+Markiert mit `!!` alles, was bei Funkausfall beisst: Eingaenge auf `detached`
+ohne Skript, abgeschalteten AP-Modus, fehlendes `sta1`, deaktiviertes BLE oder
+BLE-RPC. Am Ende steht, ueber wie viele Geraete der BluGw noch herankommt und
+welche bei Funkausfall stumm blieben.
 
 ## Wie der Monitor arbeitet
 
