@@ -16,7 +16,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, resolve } from 'path';
 import yaml from 'js-yaml';
-import { query, withTransaction } from '../db/client.js';
+import { query } from '../db/client.js';
 import { callGateway } from '../gateway-client.js';
 import { logger } from '../observability/logger.js';
 import { bumpMinorVersion } from '../few-shot-curator/index.js';
@@ -273,7 +273,7 @@ async function testImprovedPrompt(
   const samples = testInputs.slice(0, 3);
   const analysisResults: PromptQualityAnalysis[] = [];
 
-  for (const sample of samples) {
+  for (const _sample of samples) {
     const currentResult = await optimizer.optimize(currentPrompt, taskType);
     const improvedResult = await optimizer.optimize(newPrompt, taskType);
 
