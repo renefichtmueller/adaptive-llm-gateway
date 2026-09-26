@@ -13,6 +13,8 @@ Vier Werkzeuge, damit kein Shelly mehr unbemerkt aus dem Netz faellt.
 | `shelly-audit.py`   | liest die Konfiguration, benennt Ausfallursachen und prueft, was bei Funkausfall traegt |
 | `shelly-setip.py`   | setzt feste IPs, damit alle in einem Adressblock liegen |
 | `shelly-mqtt.py`    | schaltet MQTT ein und richtet es auf einen Broker aus |
+| `shelly-fix.py`     | stellt AP-Modus, BLE und Fallback-WLAN her |
+| `mosquitto/`        | Broker-Deployment fuer Erik (Docker Compose) |
 
 Alle schreibenden Werkzeuge laufen ohne `--apply` als Trockenlauf.
 
@@ -98,6 +100,24 @@ Markiert mit `!!` alles, was bei Funkausfall beisst: Eingaenge auf `detached`
 ohne Skript, abgeschalteten AP-Modus, fehlendes `sta1`, deaktiviertes BLE oder
 BLE-RPC. Am Ende steht, ueber wie viele Geraete der BluGw noch herankommt und
 welche bei Funkausfall stumm blieben.
+
+### Zugangswege herstellen
+
+Was das Audit als fehlend meldet, setzt `shelly-fix.py` auch:
+
+```bash
+~/bin/shelly-fix.py --all            # zeigt, was fehlt
+~/bin/shelly-fix.py --all --apply    # setzt AP-Modus, BLE + BLE-RPC, sta1
+```
+
+Anders als `shelly-setip.py` ist das ungefaehrlich: jede Aenderung fuegt einen
+Zugangsweg hinzu, keine nimmt einen weg. Geraete, die schon richtig stehen,
+bekommen keinen Neustart. Fuer `--sta1` braucht es das Ersatznetz in
+`config.json`:
+
+```json
+{ "sta1": { "ssid": "LTE-Backup", "pass": "…" } }
+```
 
 ## Wie der Monitor arbeitet
 

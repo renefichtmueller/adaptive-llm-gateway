@@ -1,0 +1,32 @@
+# Mosquitto als MQTT-Broker fuer die Shellys.
+#
+# Auf Erik (192.168.178.82) ablegen und starten:
+#   cd /opt/mosquitto && docker compose up -d
+#
+# Danach die Shellys darauf ausrichten:
+#   shelly-mqtt.py --broker 192.168.178.82:1883 --apply
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    # Host-Netz, damit die Shellys den Broker ohne NAT erreichen und der
+    # Broker die Quell-IPs sieht.
+    network_mode: host
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./passwd:/mosquitto/config/passwd:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "127.0.0.1", "-p", "1883",
+             "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "3",
+             "-u", "shelly", "-P", "$${MQTT_PASS}"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:
