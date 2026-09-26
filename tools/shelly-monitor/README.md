@@ -21,13 +21,28 @@ Alle schreibenden Werkzeuge laufen ohne `--apply` als Trockenlauf.
 ## Installation (Mac Studio)
 
 ```bash
-mkdir -p ~/bin && cp shelly-*.py ~/bin/ && chmod +x ~/bin/shelly-*.py
-~/bin/shelly-monitor.py
-
-sed "s|REPLACE_WITH_PATH|$HOME/bin|" com.rf.shelly-monitor.plist \
-  > ~/Library/LaunchAgents/com.rf.shelly-monitor.plist
-launchctl load ~/Library/LaunchAgents/com.rf.shelly-monitor.plist
+bash install.sh
 ```
+
+Das richtet alles ein: Werkzeuge nach `~/bin`, Konfigurationsgeruest,
+beide Hintergrundjobs, erster Scan. Mehrfach ausfuehrbar — eine vorhandene
+`config.json` wird nicht ueberschrieben. Das Skript warnt ausserdem, wenn es
+auf einem Rechner laeuft, der per WLAN am Netz haengt.
+
+Danach nur noch das Geraete-Passwort in `~/.shelly-monitor/config.json`
+eintragen.
+
+### Was dauerhaft laeuft
+
+| Job | Takt | Aufgabe |
+|---|---|---|
+| `com.rf.shelly-monitor` | alle 5 Min | Erreichbarkeit, Alarm, neue Geraete |
+| `com.rf.shelly-enforce` | taeglich 4:30 | AP-Modus, BLE + BLE-RPC, Fallback-WLAN nachsetzen |
+
+Der zweite Job ist der Grund, dass die Haertung **bleibt**: verliert ein Geraet
+seine Einstellungen — Werksreset, Austausch, Firmware-Update, das etwas
+zurueckdreht — sind sie am naechsten Morgen wieder da. Geraete, die schon
+richtig stehen, bleiben unberuehrt und bekommen keinen Neustart.
 
 ## Konfiguration
 

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.rf.shelly-enforce</string>
+
+  <!-- Setzt AP-Modus, BLE + BLE-RPC und das Fallback-WLAN wieder, falls ein
+       Geraet sie verloren hat — nach Werksreset, Austausch oder einem
+       Firmware-Update, das Einstellungen zurueckdreht. Geraete, die schon
+       richtig stehen, bleiben unberuehrt und bekommen keinen Neustart.
+       Deshalb ist taeglich unbedenklich. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>REPLACE_WITH_PATH/shelly-fix.py</string>
+    <string>--all</string>
+    <string>--apply</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>4</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/shelly-enforce.out</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/shelly-enforce.err</string>
+
+  <key>LowPriorityIO</key>
+  <true/>
+</dict>
+</plist>

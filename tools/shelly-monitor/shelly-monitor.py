@@ -234,7 +234,9 @@ def notify(title, message):
 # --- Inventar ----------------------------------------------------------------
 
 def check():
+    first_run = not os.path.exists(INVENTORY)
     inv = load(INVENTORY, {})
+    known = set(inv)
 
     # Erstlauf: erwartete Geraete anlegen, damit Fehlende ueberhaupt auffallen.
     for mac, name in SEED.items():
@@ -272,6 +274,15 @@ def check():
             gone.append((mac, e))
         if e["misses"] >= ALERT_AFTER_MISSES:
             log(f"MISSING {mac} {e.get('name')} seit {e.get('missing_since')}")
+
+    # Ein neu aufgetauchter Shelly soll auffallen: er braucht einen Namen und
+    # eine feste Adresse, sonst faengt das Raetselraten von vorn an.
+    fresh = [(m, d) for m, d in seen.items() if m not in known and not first_run]
+    if fresh:
+        names = ", ".join(
+            f"{inv[m].get('name') or m} ({d['ip']})" for m, d in fresh)
+        notify(f"{len(fresh)} neuer Shelly im Netz", names)
+        log(f"NEW {names}")
 
     if gone:
         names = ", ".join(e.get("name") or mac for mac, e in gone)
