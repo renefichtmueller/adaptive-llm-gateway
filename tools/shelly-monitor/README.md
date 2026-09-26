@@ -110,6 +110,33 @@ welche bei Funkausfall stumm blieben.
 - Bei Ausfall zusaetzlich ein WLAN-Scan nach Shelly-APs. Ein Treffer
   unterscheidet ein Geraet mit verlorenen Zugangsdaten von einem stromlosen.
 
+## Wenn dauernd Geraete fehlen
+
+```bash
+~/bin/shelly-monitor.py --history
+```
+
+Zeigt, welches Geraet wie oft ausfiel und zu welcher Stunde. Das Muster sagt
+mehr als der Einzelfall:
+
+| Muster | Deutung |
+|---|---|
+| immer dasselbe Geraet | Funk oder Stromversorgung an diesem Ort |
+| alle gleichzeitig | Router, DHCP, oder das Netz des scannenden Rechners |
+| immer zur selben Stunde | Zeitgesteuertes: WLAN-Nachtschaltung, Lease-Wechsel |
+| viele `VERIFY`-Zeilen | Signal grenzwertig, keine echten Ausfaelle |
+
+**Von wo gescannt wird, entscheidet mit.** Laeuft der Monitor auf einem Laptop
+im WLAN, kann ein Geraet unerreichbar erscheinen, das in Ordnung ist — anderes
+Band, anderer Repeater, schlafendes Interface. Der Monitor gehoert auf einen
+Rechner, der dauerhaft und moeglichst per Kabel am Netz haengt; `status.json`
+haelt unter `scanned_from` fest, welche Maschine gemeldet hat.
+
+Gegen kurze Aussetzer faellt der Monitor selbst nach: Geraete, die der schnelle
+Durchgang verpasst, werden ein zweites Mal mit 6 s Timeout und drei Versuchen
+gezielt angefragt. Erst wenn auch das scheitert, zaehlt ein Fehlversuch — und
+Alarm gibt es erst nach dreien.
+
 ## Dateien
 
 | Pfad | Inhalt |

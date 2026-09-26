@@ -21,6 +21,7 @@ import re
 import socket
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -34,6 +35,10 @@ LOG = os.path.join(HOME, "monitor.log")
 
 PROBE_TIMEOUT = 2.0
 WORKERS = 64
+# Nachfassen fuer Geraete, die der schnelle Durchgang verpasst hat.
+VERIFY_TIMEOUT = 6.0
+VERIFY_ATTEMPTS = 3
+RETRY_PAUSE = 1.0
 # Erst nach so vielen Fehlversuchen in Folge wird Alarm geschlagen. Verhindert,
 # dass ein einzelner WLAN-Haenger eine Meldung ausloest.
 ALERT_AFTER_MISSES = 3
@@ -113,16 +118,27 @@ def local_prefixes():
     return out
 
 
-def probe(ip):
-    """Fragt /shelly ab. Gibt die Geraeteinfo zurueck oder None."""
-    try:
-        req = urllib.request.Request(f"http://{ip}/shelly",
-                                     headers={"Accept": "application/json"})
-        # Kein Proxy — Shellys sind immer direkt im LAN erreichbar.
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        with opener.open(req, timeout=PROBE_TIMEOUT) as resp:
-            data = json.loads(resp.read(8192).decode("utf-8", "replace"))
-    except (urllib.error.URLError, OSError, ValueError, socket.timeout):
+def probe(ip, timeout=PROBE_TIMEOUT, attempts=1):
+    """Fragt /shelly ab. Gibt die Geraeteinfo zurueck oder None.
+
+    Ein Shelly auf schwachem Signal antwortet nicht immer beim ersten Versuch.
+    Ein einzelner Aussetzer darf nicht als Ausfall durchgehen, deshalb laesst
+    sich hier mehrfach fragen.
+    """
+    data = None
+    for n in range(attempts):
+        try:
+            req = urllib.request.Request(f"http://{ip}/shelly",
+                                         headers={"Accept": "application/json"})
+            # Kein Proxy — Shellys sind immer direkt im LAN erreichbar.
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=timeout) as resp:
+                data = json.loads(resp.read(8192).decode("utf-8", "replace"))
+            break
+        except (urllib.error.URLError, OSError, ValueError, socket.timeout):
+            if n + 1 < attempts:
+                time.sleep(RETRY_PAUSE)
+    if data is None:
         return None
     mac = data.get("mac")
     if not mac:
@@ -155,6 +171,33 @@ def sweep():
             if dev:
                 found[dev["mac"]] = dev
     return found
+
+
+def verify_missing(inv, found):
+    """Zweiter Durchgang, nur fuer Geraete, die der schnelle Sweep nicht sah.
+
+    Laengeres Timeout, mehrere Versuche, gezielt auf die letzte bekannte
+    Adresse. Das trennt ein wirklich abwesendes Geraet von einem, das beim
+    ersten Anlauf nur zu langsam war — der haeufigste Grund fuer Fehlalarme,
+    wenn vom WLAN aus gescannt wird.
+    """
+    candidates = [(mac, e.get("ip")) for mac, e in inv.items()
+                  if mac not in found and e.get("ip")]
+    if not candidates:
+        return 0
+    recovered = 0
+    with ThreadPoolExecutor(max_workers=min(WORKERS, 16)) as pool:
+        results = pool.map(
+            lambda c: (c[0], probe(c[1], VERIFY_TIMEOUT, VERIFY_ATTEMPTS)),
+            candidates)
+        for mac, dev in results:
+            if dev and dev["mac"] == mac:
+                found[mac] = dev
+                recovered += 1
+    if recovered:
+        log(f"VERIFY {recovered} Geraet(e) erst im zweiten, geduldigeren "
+            f"Durchgang erreicht — Signal oder Netzweg ist grenzwertig")
+    return recovered
 
 
 def ap_scan():
@@ -199,6 +242,7 @@ def check():
                              "misses": 0, "alerted": False})
 
     seen = sweep()
+    slow = verify_missing(inv, seen)
 
     for mac, dev in seen.items():
         e = inv.setdefault(mac, {"first_seen": now(), "misses": 0, "alerted": False})
@@ -208,6 +252,7 @@ def check():
         elif not e.get("name"):
             e["name"] = f"({dev.get('app') or dev.get('model')}, unbenannt)"
         e.update({"ip": dev["ip"], "model": dev["model"], "gen": dev["gen"],
+                  "seen_from": socket.gethostname(),
                   "fw": dev["fw"], "id": dev["id"], "auth": dev["auth"],
                   "last_seen": now(), "misses": 0, "alerted": False})
         e.setdefault("first_seen", now())
@@ -238,7 +283,8 @@ def check():
                    "WLAN-Zugang verloren: " + ", ".join(aps))
 
     save(INVENTORY, inv)
-    save(STATUS, {"checked_at": now(), "online": len(seen),
+    save(STATUS, {"checked_at": now(), "scanned_from": socket.gethostname(),
+                  "slow_responders": slow, "online": len(seen),
                   "total": len(inv),
                   "missing": sorted(m for m, e in inv.items()
                                     if e.get("misses", 0) >= ALERT_AFTER_MISSES),
@@ -284,12 +330,67 @@ def render(inv):
             print(f"{'':<9} seit {e['missing_since']}")
 
 
+def history():
+    """Fasst monitor.log zusammen: wer faellt aus, wie oft, zu welcher Stunde.
+
+    Ein Muster sagt mehr als ein Einzelfall. Immer dasselbe Geraet deutet auf
+    Funk oder Stromversorgung dort; alle gleichzeitig auf Router, DHCP oder das
+    Netz des scannenden Rechners; immer zur selben Stunde auf etwas
+    Zeitgesteuertes wie eine WLAN-Nachtschaltung oder einen Lease-Wechsel.
+    """
+    if not os.path.exists(LOG):
+        print("Noch kein Log — der Monitor lief noch nicht.")
+        return 0
+    per_device, per_hour, slow = {}, {}, 0
+    for line in open(LOG):
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        stamp, kind = parts[0], parts[1]
+        if kind == "VERIFY":
+            slow += 1
+            continue
+        if kind not in ("MISSING", "RECOVERED"):
+            continue
+        mac = parts[2]
+        name = " ".join(parts[3:]).split(" seit ")[0] or mac
+        d = per_device.setdefault(mac, {"name": name, "MISSING": 0, "RECOVERED": 0})
+        d[kind] += 1
+        if kind == "MISSING":
+            hour = stamp[11:13]
+            per_hour[hour] = per_hour.get(hour, 0) + 1
+
+    if not per_device:
+        print("Keine Ausfaelle im Log.")
+    else:
+        print("Ausfaelle je Geraet (Meldungen, nicht Einzelminuten):")
+        for mac, d in sorted(per_device.items(),
+                             key=lambda kv: -kv[1]["MISSING"]):
+            print(f"  {d['MISSING']:>4}x weg, {d['RECOVERED']:>3}x zurueck   "
+                  f"{mac}  {d['name']}")
+        if per_hour:
+            print("\nVerteilung ueber den Tag (UTC):")
+            peak = max(per_hour.values())
+            for h in sorted(per_hour):
+                bar = "#" * max(1, round(per_hour[h] * 30 / peak))
+                print(f"  {h}:00  {bar} {per_hour[h]}")
+    if slow:
+        print(f"\n{slow}x antwortete ein Geraet erst im geduldigeren zweiten "
+              f"Durchgang — Signal oder Netzweg ist dort grenzwertig.")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description="Shelly-Erreichbarkeitsmonitor")
     ap.add_argument("--status", action="store_true", help="nur Inventar anzeigen")
     ap.add_argument("--json", action="store_true", help="Inventar als JSON")
+    ap.add_argument("--history", action="store_true",
+                    help="Muster der Ausfaelle aus dem Log")
     ap.add_argument("--forget", metavar="MAC", help="Geraet aus dem Inventar loeschen")
     args = ap.parse_args()
+
+    if args.history:
+        return history()
 
     if args.forget:
         inv = load(INVENTORY, {})
