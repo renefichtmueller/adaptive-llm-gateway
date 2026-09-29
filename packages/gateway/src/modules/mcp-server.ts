@@ -18,6 +18,7 @@
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logger } from '../observability/logger.js';
+import { configuredToken } from './admin-auth.js';
 
 // ─── MCP types ──────────────────────────────────────────────────────────────
 
@@ -108,7 +109,7 @@ async function callEmbed(params: Record<string, unknown>): Promise<unknown> {
 }
 
 async function callDiscover(): Promise<unknown> {
-  const token = process.env['DASHBOARD_AUTH_TOKEN'];
+  const token = configuredToken();
   const res = await fetch(`${INTERNAL_BASE}/api/dashboard/discover`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });

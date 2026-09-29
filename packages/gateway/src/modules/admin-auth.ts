@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'crypto';
 
 const TOKEN_ENV_KEYS = ['DASHBOARD_AUTH_TOKEN', 'LLM_GATEWAY_ADMIN_TOKEN', 'ADMIN_TOKEN'] as const;
 
-function configuredToken(): string | undefined {
+export function configuredToken(): string | undefined {
   for (const key of TOKEN_ENV_KEYS) {
     const value = process.env[key]?.trim();
     if (value) return value;
