@@ -18,10 +18,16 @@ const {
   __resetSemanticCache,
 } = await import('../semantic-cache.js');
 
-/** Build a fake 4-dim vector based on a seed character so similar inputs get similar vectors */
+/**
+ * Build a fake 4-dim vector deterministically from the seed string.
+ * Different seeds land in genuinely different directions (identical seeds
+ * yield identical vectors); a plain scalar-multiple scheme would make every
+ * vector colinear and cosine similarity 1.0 across the board.
+ */
 function fakeVector(seed: string): number[] {
-  const code = seed.charCodeAt(0) || 1;
-  return [code / 100, code / 200, code / 300, code / 400];
+  let h = 7;
+  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) % 100003;
+  return [Math.sin(h), Math.cos(h * 1.7), Math.sin(h * 2.3), Math.cos(h * 0.9)];
 }
 
 const originalFetch = global.fetch;

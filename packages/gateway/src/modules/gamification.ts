@@ -60,7 +60,7 @@ const PET_SPECIES: readonly PetSpecies[] = [
     ],
     stages: [
       { name: 'Kitten',   unlocksAtTokensSaved: 0,      asciiArt: ['  /\\_/\\ ', ' ( o.o )', '  > ^ < '] },
-      { name: 'Cat',      unlocksAtTokensSaved: 5_000,  asciiArt: [' /\\_/\\  ', '( ⌐■_■ )', ' (\")_(\") '] },
+      { name: 'Cat',      unlocksAtTokensSaved: 5_000,  asciiArt: [' /\\_/\\  ', '( ⌐■_■ )', ' (")_(") '] },
       { name: 'Wise Cat', unlocksAtTokensSaved: 50_000, asciiArt: ['  ╱|、    ', ' (˚ˎ。7  ', '  |、˜〵  ', '  じしˍ,)ノ'] },
     ],
   },
@@ -177,15 +177,15 @@ async function gatherStats(db: Pool): Promise<Stats> {
       const r2 = await db.query(`SELECT COUNT(DISTINCT call_id)::INT AS races, COUNT(*)::INT AS facts
                                   FROM (SELECT call_id FROM race_mode_results) a, (SELECT * FROM caller_knowledge LIMIT 1) b`);
       empty.raceWins = parseInt(r2.rows[0]?.races ?? '0', 10);
-    } catch {}
+    } catch { /* streak stays 0 when tables are missing */ }
     try {
       const r3 = await db.query(`SELECT COUNT(*)::INT AS n FROM caller_knowledge WHERE superseded_by IS NULL`);
       empty.factsStored = parseInt(r3.rows[0]?.n ?? '0', 10);
-    } catch {}
+    } catch { /* streak stays 0 when tables are missing */ }
     try {
       const r4 = await db.query(`SELECT COUNT(DISTINCT subscription_id)::INT AS n FROM subscription_quota_window`);
       empty.subscriptionsConfigured = parseInt(r4.rows[0]?.n ?? '0', 10);
-    } catch {}
+    } catch { /* streak stays 0 when tables are missing */ }
 
     // Streak calculation: count consecutive days with activity, considering BOTH
     // direct gateway requests AND MCP tool calls (so historical Lean-CTX-imported
@@ -221,7 +221,7 @@ async function gatherStats(db: Pool): Promise<Stats> {
         }
       }
       empty.streakDays = streak;
-    } catch {}
+    } catch { /* streak stays 0 when tables are missing */ }
   } catch (err) {
     logger.warn({ err }, 'gamification: gatherStats failed');
   }

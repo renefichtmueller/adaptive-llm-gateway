@@ -13,6 +13,8 @@
  *   - Sunday 03:00:  fine-tuning trigger check
  */
 
+import { mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import cron from 'node-cron';
 import { logger } from './observability/logger.js';
 import { closePool, query } from './db/client.js';
@@ -60,7 +62,10 @@ async function healthCheck(): Promise<void> {
 
 // ─── Fine-tuning trigger ──────────────────────────────────────────────────────
 
-async function checkFineTuningTrigger(): Promise<void> {
+const FINE_TUNING_EXPORT_DIR = process.env['FINE_TUNING_EXPORT_DIR'] ?? './fine-tuning-exports';
+const FINE_TUNING_MIN_EXAMPLES = parseInt(process.env['FINE_TUNING_MIN_EXAMPLES'] ?? '500', 10);
+
+export async function checkFineTuningTrigger(): Promise<void> {
   // Count high-quality unprocessed examples in learning_corpus
   const result = await query<{ count: string; task_type: string }>(
     `SELECT task_type, COUNT(*)::int as count
@@ -68,35 +73,76 @@ async function checkFineTuningTrigger(): Promise<void> {
      WHERE included_in_run IS NULL
        AND quality_score >= 8.0
      GROUP BY task_type
-     HAVING COUNT(*) >= 500
+     HAVING COUNT(*) >= ${FINE_TUNING_MIN_EXAMPLES}
      ORDER BY count DESC`,
   );
 
   if (result.rows.length === 0) {
-    logger.info('Fine-tuning check: not enough training examples yet (need >= 500 per task_type)');
+    logger.info(
+      { minExamples: FINE_TUNING_MIN_EXAMPLES },
+      'Fine-tuning check: not enough training examples yet',
+    );
     return;
   }
 
   for (const row of result.rows) {
-    logger.info(
-      { taskType: row.task_type, count: parseInt(row.count) },
-      'Fine-tuning threshold reached — triggering run',
-    );
+    const taskType = row.task_type;
+    const count = parseInt(row.count);
+    logger.info({ taskType, count }, 'Fine-tuning threshold reached — triggering run');
 
-    // Record the fine-tuning run intent
-    await query(
-      `INSERT INTO fine_tuning_runs
-         (base_model, task_type, training_examples, validation_examples, epochs, lora_rank, status)
-       VALUES ('qwen2.5:14b', $1, $2, $3, 3, 16, 'queued')`,
+    // Record the fine-tuning run
+    const runResult = await query<{ id: string }>(
+      `INSERT INTO fine_tuning_runs (base_model, sample_count, task_types, status, metrics)
+       VALUES ('qwen2.5:14b', $1, $2, 'queued', $3)
+       RETURNING id`,
       [
-        row.task_type,
-        Math.floor(parseInt(row.count) * 0.9),
-        Math.floor(parseInt(row.count) * 0.1),
+        count,
+        [taskType],
+        JSON.stringify({
+          training_examples: Math.floor(count * 0.9),
+          validation_examples: Math.floor(count * 0.1),
+          epochs: 3,
+          lora_rank: 16,
+        }),
       ],
     );
+    const runId = runResult.rows[0]?.id;
+    if (!runId) continue;
 
-    // The actual fine-tuner package picks this up separately
-    logger.info({ taskType: row.task_type }, 'Fine-tuning run queued');
+    // Export the training set as JSONL, ready for external fine-tuning
+    // tooling (e.g. LoRA on the base model), and mark the examples as used.
+    try {
+      const examples = await query<{ id: string; prompt_text: string; completion_text: string }>(
+        `SELECT id, prompt_text, completion_text
+         FROM learning_corpus
+         WHERE task_type = $1 AND included_in_run IS NULL AND quality_score >= 8.0
+         ORDER BY quality_score DESC`,
+        [taskType],
+      );
+
+      mkdirSync(FINE_TUNING_EXPORT_DIR, { recursive: true });
+      const exportPath = join(FINE_TUNING_EXPORT_DIR, `${taskType.replace(/[^a-z0-9_-]/gi, '_')}-${runId}.jsonl`);
+      const jsonl = examples.rows
+        .map((e) => JSON.stringify({ prompt: e.prompt_text, completion: e.completion_text }))
+        .join('\n');
+      writeFileSync(exportPath, jsonl + '\n', 'utf-8');
+
+      await query(
+        `UPDATE learning_corpus SET included_in_run = $1 WHERE id = ANY($2::uuid[])`,
+        [runId, examples.rows.map((e) => e.id)],
+      );
+      await query(
+        `UPDATE fine_tuning_runs SET status = 'exported', notes = $2 WHERE id = $1`,
+        [runId, `training set exported to ${exportPath}`],
+      );
+
+      logger.info(
+        { taskType, runId, examples: examples.rows.length, exportPath },
+        'Fine-tuning training set exported',
+      );
+    } catch (err) {
+      logger.error({ err, taskType, runId }, 'Fine-tuning export failed (run stays queued)');
+    }
   }
 }
 

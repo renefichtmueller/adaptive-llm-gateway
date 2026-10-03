@@ -66,7 +66,7 @@ export function loadTLSCertificates(config: TLSConfig): { key: Buffer; cert: Buf
     const key = readFileSync(config.keyPath);
     return { key, cert };
   } catch (error) {
-    throw new Error(`Failed to load TLS certificates: ${error}`);
+    throw new Error(`Failed to load TLS certificates: ${error}`, { cause: error });
   }
 }
 

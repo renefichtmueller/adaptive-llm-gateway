@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import Fastify from 'fastify'
 import FastifyCors from '@fastify/cors'
 import { createTIPClient } from '@llm-gateway/client'
@@ -50,14 +51,21 @@ interface ChatCompletionStreamEvent {
   }>
 }
 
+export const DEFAULT_PORT = 8788
+
+/** Split completion text into whitespace-preserving chunks for SSE delivery. */
+export function chunkText(text: string): string[] {
+  return text.match(/\S+\s*|\s+/g) ?? []
+}
+
 export class ChatGPTAPIAdapter {
   private fastify = Fastify()
   private client = createTIPClient({
-    agentId: 'chatgpt-api-adapter',
-    ollamaUrl: process.env.OLLAMA_URL || 'localhost:11434'
+    agentId: process.env.AGENT_ID || 'chatgpt-api-adapter',
+    ollamaUrl: process.env.OLLAMA_URL || 'http://localhost:11434'
   })
 
-  constructor(private port: number = 0) {
+  constructor(private port: number = DEFAULT_PORT) {
     this.setupRoutes()
   }
 
@@ -110,9 +118,17 @@ export class ChatGPTAPIAdapter {
         const mappedModel = this.mapModelName(model)
 
         if (stream) {
-          reply.type('text/event-stream')
-          reply.header('Cache-Control', 'no-cache')
-          reply.header('Connection', 'keep-alive')
+          // The gateway does not stream through the TIP client yet, so the
+          // completion is fetched in full and replayed as SSE chunks.
+          reply.hijack()
+          reply.raw.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive'
+          })
+
+          const streamId = `chatcmpl-${randomUUID()}`
+          const createdAt = Math.floor(Date.now() / 1000)
 
           try {
             const response = await this.client.completion(prompt, {
@@ -121,13 +137,10 @@ export class ChatGPTAPIAdapter {
               temperature
             })
 
-            const createdAt = Math.floor(Date.now() / 1000)
-            const chunks = response.text.split('')
-
-            for (const chunk of chunks) {
+            for (const chunk of chunkText(response.text)) {
               const event: ChatCompletionStreamEvent = {
-                id: `chatcmpl-${Date.now()}`,
-                object: 'text_completion.chunk',
+                id: streamId,
+                object: 'chat.completion.chunk',
                 created: createdAt,
                 model,
                 choices: [
@@ -142,8 +155,8 @@ export class ChatGPTAPIAdapter {
             }
 
             const finalEvent: ChatCompletionStreamEvent = {
-              id: `chatcmpl-${Date.now()}`,
-              object: 'text_completion.chunk',
+              id: streamId,
+              object: 'chat.completion.chunk',
               created: createdAt,
               model,
               choices: [
@@ -156,11 +169,12 @@ export class ChatGPTAPIAdapter {
             }
             reply.raw.write(`data: ${JSON.stringify(finalEvent)}\n\n`)
             reply.raw.write('data: [DONE]\n\n')
-            reply.raw.end()
           } catch (error) {
+            request.log.error({ err: error }, 'streaming completion failed')
             reply.raw.write(
               `data: ${JSON.stringify({ error: 'Completion failed' })}\n\n`
             )
+          } finally {
             reply.raw.end()
           }
         } else {
@@ -172,7 +186,7 @@ export class ChatGPTAPIAdapter {
             })
 
             const result: ChatCompletionResponse = {
-              id: `chatcmpl-${Date.now()}`,
+              id: `chatcmpl-${randomUUID()}`,
               object: 'chat.completion',
               created: Math.floor(Date.now() / 1000),
               model,
@@ -194,7 +208,8 @@ export class ChatGPTAPIAdapter {
             }
             return result
           } catch (error) {
-            reply.code(500).send({
+            request.log.error({ err: error }, 'completion failed')
+            return reply.code(500).send({
               error: {
                 message: 'Completion request failed',
                 type: 'server_error',
@@ -208,11 +223,10 @@ export class ChatGPTAPIAdapter {
     )
 
     this.fastify.get('/health', async () => {
-      try {
-        const health = await this.client.health()
-        return { status: 'ok', gateway: health }
-      } catch (error) {
-        return { status: 'degraded', error: 'Gateway unavailable' }
+      const health = await this.client.health()
+      return {
+        status: health.healthy ? 'ok' : 'degraded',
+        gateway: health
       }
     })
   }

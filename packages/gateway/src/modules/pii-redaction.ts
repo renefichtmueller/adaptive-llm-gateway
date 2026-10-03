@@ -85,25 +85,29 @@ function ibanValid(iban: string): boolean {
 
 // ─── Detection rules ─────────────────────────────────────────────────────────
 
+// Rule order matters: structured financial identifiers (IBAN, credit card)
+// must run BEFORE the loose phone patterns, which would otherwise consume
+// digit groups inside them and break their detection.
 const RULES: readonly DetectionRule[] = [
   // Email — RFC 5322-ish simplified
   { category: 'email', pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}\b/g },
 
-  // International phone numbers (loose; E.164-style)
-  { category: 'phone', pattern: /\b(?:\+|00)\d{1,3}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}(?:[\s.-]?\d{1,4})?\b/g },
-  // German national format (0xxx-xxxx-xxxx)
-  { category: 'phone', pattern: /\b0\d{2,4}[\s.-]\d{3,4}[\s.-]\d{3,4}\b/g },
+  // IBAN
+  { category: 'iban', pattern: /\b[A-Z]{2}\d{2}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b/g, validator: ibanValid },
 
   // Credit cards (with Luhn validation)
   { category: 'credit_card', pattern: /\b(?:\d{4}[\s-]?){3}\d{4}\b/g, validator: luhnValid },
   // Amex 15-digit
   { category: 'credit_card', pattern: /\b\d{4}[\s-]?\d{6}[\s-]?\d{5}\b/g, validator: luhnValid },
 
-  // IBAN
-  { category: 'iban', pattern: /\b[A-Z]{2}\d{2}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b/g, validator: ibanValid },
-
   // US SSN (XXX-XX-XXXX)
   { category: 'ssn', pattern: /\b\d{3}-\d{2}-\d{4}\b/g },
+
+  // International phone numbers (loose; E.164-style). A word boundary cannot
+  // precede a literal "+", so a negative lookbehind guards the prefix.
+  { category: 'phone', pattern: /(?:(?<![\w+.-])\+|\b00)\d{1,3}[\s.-]?\(?\d{2,4}\)?(?:[\s.-]?\d{2,4}){2,4}\b/g },
+  // German national format (0xxx-xxxx-xxxx)
+  { category: 'phone', pattern: /\b0\d{2,4}[\s.-]\d{3,4}[\s.-]\d{3,4}\b/g },
 
   // IPv4
   { category: 'ip_address', pattern: /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g },
