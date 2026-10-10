@@ -38,7 +38,7 @@ export async function batchRoute(fastify: FastifyInstance): Promise<void> {
       const { caller, tasks, webhook_url, priority } = body;
 
       // Insert batch job record
-      let batchDbId = '';
+      let batchDbId: string;
       try {
         const result = await query<{ id: string }>(
           `INSERT INTO batch_jobs (caller, task_count, webhook_url, status, pg_boss_id)
@@ -53,7 +53,7 @@ export async function batchRoute(fastify: FastifyInstance): Promise<void> {
       }
 
       // Submit to pg-boss queue
-      let pgBossId: string | null = null;
+      let pgBossId: string | null;
       try {
         pgBossId = await submitBatchJob(
           caller,
