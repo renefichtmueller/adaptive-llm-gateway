@@ -1,0 +1,229 @@
+From 06d1900b656eba5624bde288da2a6585fdeeb94a Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Tue, 8 Sep 2026 20:49:59 +0000
+Subject: [PATCH 2/2] fix(pwa): make the sync banner honest and its escape
+ hatch reachable
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Ergänzt den Worker-Fix auf der Client-Seite.
+
+- "Jetzt synchronisieren" setzte den Syncing-Zustand auch dann, wenn es
+  gar keinen `controller` gab (Seite vor der Worker-Übernahme geladen).
+  Es konnte nie eine Antwort kommen, also blieb der Knopf dauerhaft
+  deaktiviert. Nachrichten gehen jetzt notfalls an den aktiven Worker der
+  Registration, und wenn wirklich niemand erreichbar ist, wird der
+  Zustand sofort zurückgenommen. Zusätzlich ein 12-Sekunden-Watchdog:
+  ein stummer Worker darf den Knopf nicht dauerhaft sperren.
+- Der Lauf meldete "Sync abgeschlossen", sobald Einträge nur verworfen
+  wurden. Mit der neuen Versuchsgrenze im Worker wäre das die Meldung
+  gewesen, mit der weggeworfene Arbeit als Erfolg durchgeht. Erfolg ist
+  jetzt nur noch tatsächlich Gesendetes oder ein bewusstes Leeren.
+- Bewegt ein Lauf nichts, obwohl Einträge übrig sind, sagt die Leiste das
+  jetzt ("Sync kommt nicht durch") und zeigt statt des nackten X ein
+  beschriftetes "Verwerfen". Genau dieser Ausweg war vorhanden, aber als
+  16px-Icon ohne Beschriftung praktisch unauffindbar -- deshalb wirkte
+  die Leiste unentfernbar.
+- Der Bestätigungsdialog nennt die Anzahl der Einträge, die verloren
+  gehen, und der Watchdog wird beim Unmount aufgeräumt.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018KRwz7ahENmumVdnhQH6Pj
+---
+ src/components/offline-status.tsx | 101 ++++++++++++++++++++++--------
+ 1 file changed, 75 insertions(+), 26 deletions(-)
+
+diff --git a/src/components/offline-status.tsx b/src/components/offline-status.tsx
+index ff1658d..f513788 100644
+--- a/src/components/offline-status.tsx
++++ b/src/components/offline-status.tsx
+@@ -10,12 +10,14 @@
+  * Mount once at the app root (Dashboard layout).
+  */
+ 
+-import { useEffect, useState, useCallback } from "react";
++import { useEffect, useRef, useState, useCallback } from "react";
+ import { WifiOff, RefreshCw, CheckCircle2, CloudUpload, X, LogIn } from "lucide-react";
+ import { useI18n } from "@/lib/i18n";
+ import styles from "./offline-status.module.css";
+ 
+ const FRESHNESS_HEADER = "X-Pulse-Cache-Time";
++// A worker that never answers must not leave the button disabled for good.
++const SYNC_WATCHDOG_MS = 12_000;
+ 
+ export default function OfflineStatus() {
+   const { t } = useI18n();
+@@ -25,24 +27,60 @@ export default function OfflineStatus() {
+   const [syncing, setSyncing] = useState(false);
+   const [justSynced, setJustSynced] = useState(false);
+   const [sessionExpired, setSessionExpired] = useState(false);
++  const [stalled, setStalled] = useState(false);
++  const watchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
+ 
+-  const refreshQueue = useCallback(() => {
+-    if (typeof navigator === "undefined") return;
+-    navigator.serviceWorker?.controller?.postMessage({ type: "GET_QUEUE" });
++  const endSync = useCallback(() => {
++    if (watchdog.current) {
++      clearTimeout(watchdog.current);
++      watchdog.current = null;
++    }
++    setSyncing(false);
+   }, []);
+ 
+-  const refreshCache = useCallback(() => {
+-    if (typeof navigator === "undefined") return;
+-    setSyncing(true);
+-    navigator.serviceWorker?.controller?.postMessage({ type: "REFRESH_CACHE" });
++  /**
++   * A page loaded before the worker took control has no `controller`, and the
++   * old code still flipped into the syncing state — the button then sat
++   * disabled on "Synchronisiere…" forever because no reply could ever arrive.
++   * Fall back to the registration's active worker, and report whether the
++   * message actually went anywhere.
++   */
++  const postToWorker = useCallback(async (message: { type: string }) => {
++    if (typeof navigator === "undefined" || !navigator.serviceWorker) return false;
++    const target =
++      navigator.serviceWorker.controller ??
++      (await navigator.serviceWorker.ready.then((reg) => reg.active).catch(() => null));
++    if (!target) return false;
++    target.postMessage(message);
++    return true;
+   }, []);
+ 
++  const beginSync = useCallback(
++    async (message: { type: string }) => {
++      setSyncing(true);
++      if (watchdog.current) clearTimeout(watchdog.current);
++      watchdog.current = setTimeout(() => setSyncing(false), SYNC_WATCHDOG_MS);
++      const delivered = await postToWorker(message);
++      if (!delivered) endSync();
++      return delivered;
++    },
++    [postToWorker, endSync]
++  );
++
++  const refreshQueue = useCallback(() => {
++    void postToWorker({ type: "GET_QUEUE" });
++  }, [postToWorker]);
++
++  const refreshCache = useCallback(() => {
++    void beginSync({ type: "REFRESH_CACHE" });
++  }, [beginSync]);
++
+   const triggerReplay = useCallback(() => {
+-    if (typeof navigator === "undefined") return;
+-    setSyncing(true);
+-    navigator.serviceWorker?.controller?.postMessage({ type: "REPLAY_QUEUE" });
+-    setTimeout(refreshQueue, 2000);
+-  }, [refreshQueue]);
++    setStalled(false);
++    void beginSync({ type: "REPLAY_QUEUE" }).then((delivered: boolean) => {
++      if (delivered) setTimeout(refreshQueue, 2000);
++    });
++  }, [beginSync, refreshQueue]);
+ 
+   /**
+    * Escape hatch: user explicitly wipes the offline queue. Used when entries
+@@ -51,16 +89,15 @@ export default function OfflineStatus() {
+    * real pending work.
+    */
+   const dismissQueue = useCallback(() => {
+-    if (typeof navigator === "undefined") return;
+     if (typeof window !== "undefined") {
+       const ok = window.confirm(
+-        "Alle ausstehenden Sync-Einträge verwerfen? Wird benutzt wenn der Sync feststeckt — alle nicht gespeicherten Änderungen gehen verloren."
++        `${queueCount} ausstehende Sync-Einträge verwerfen? Wird benutzt wenn der Sync feststeckt — alle nicht gespeicherten Änderungen gehen verloren.`
+       );
+       if (!ok) return;
+     }
+-    setSyncing(true);
+-    navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_QUEUE" });
+-  }, []);
++    setStalled(false);
++    void beginSync({ type: "CLEAR_QUEUE" });
++  }, [beginSync, queueCount]);
+ 
+   useEffect(() => {
+     const on = () => {
+@@ -85,14 +122,20 @@ export default function OfflineStatus() {
+         setQueueCount(data.queue?.length || 0);
+       }
+       if (data?.type === "QUEUE_UPDATED") {
+-        setSyncing(false);
++        endSync();
+         setSessionExpired(!!data.sessionExpired);
+-        // Flash success banner on any state change that emptied or shrank the
+-        // queue — successful replay, stale drop, or explicit CLEAR_QUEUE.
+-        if (data.replayed > 0 || data.dropped > 0 || data.cleared) {
++        // Only a real send (or an explicit wipe) is a success. Entries that the
++        // worker had to retire after too many failed attempts are not, and
++        // reporting them as "Sync abgeschlossen" hid the fact that work was
++        // thrown away.
++        if (data.replayed > 0 || data.cleared) {
+           setJustSynced(true);
+           setTimeout(() => setJustSynced(false), 3000);
+         }
++        // A run that moved nothing while entries remain means the queue is
++        // wedged on something the user has to decide about. Say so, and put a
++        // labelled discard button in reach instead of a bare icon.
++        setStalled(!data.sessionExpired && !data.offline && data.stuck > 0 && !data.replayed && !data.dropped);
+         // Use the authoritative `remaining` count if the SW sent it, otherwise
+         // re-query.
+         if (typeof data.remaining === "number") {
+@@ -102,7 +145,7 @@ export default function OfflineStatus() {
+         }
+       }
+       if (data?.type === "CACHE_REFRESHED") {
+-        setSyncing(false);
++        endSync();
+         setLastSync(Date.now());
+         setJustSynced(true);
+         setTimeout(() => setJustSynced(false), 3000);
+@@ -110,7 +153,7 @@ export default function OfflineStatus() {
+     };
+     navigator.serviceWorker?.addEventListener("message", handler);
+     return () => navigator.serviceWorker?.removeEventListener("message", handler);
+-  }, [refreshQueue]);
++  }, [refreshQueue, endSync]);
+ 
+   // Poll queue every 30s + on mount
+   useEffect(() => {
+@@ -119,6 +162,10 @@ export default function OfflineStatus() {
+     return () => clearInterval(id);
+   }, [refreshQueue]);
+ 
++  useEffect(() => () => {
++    if (watchdog.current) clearTimeout(watchdog.current);
++  }, []);
++
+   // Probe a cached API to read its freshness header → last successful sync time
+   useEffect(() => {
+     let active = true;
+@@ -231,7 +278,7 @@ export default function OfflineStatus() {
+               {queueCount} {queueCount !== 1 ? t("sync.changesReady") : t("sync.changeReady")}
+             </div>
+             <div className={styles.detail}>
+-              {t("sync.updated")} {ageLabel}
++              {stalled ? "Sync kommt nicht durch — Einträge lassen sich verwerfen" : `${t("sync.updated")} ${ageLabel}`}
+             </div>
+           </div>
+           <button
+@@ -254,9 +301,11 @@ export default function OfflineStatus() {
+             disabled={syncing}
+             title="Queue verwerfen — nur benutzen wenn Sync feststeckt"
+             aria-label="Sync-Queue verwerfen"
+-            className={styles.dismissAction}
++            className={stalled ? styles.primaryAction : styles.dismissAction}
++            style={stalled ? { background: "transparent", color: fg, border: `1px solid ${fg}` } : undefined}
+           >
+             <X size={16} aria-hidden="true" />
++            {stalled ? "Verwerfen" : null}
+           </button>
+         </>
+       )}
+-- 
+2.43.0
+
