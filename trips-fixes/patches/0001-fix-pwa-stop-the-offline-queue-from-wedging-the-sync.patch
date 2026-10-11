@@ -1,0 +1,315 @@
+From c85e765ade1cc276df4d070c654e9d18b6962ef6 Mon Sep 17 00:00:00 2001
+From: Rene Fichtmueller <rf@flexoptix.net>
+Date: Tue, 8 Sep 2026 20:47:55 +0000
+Subject: [PATCH 1/2] fix(pwa): stop the offline queue from wedging the sync
+ banner
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Die Sync-Leiste hing dauerhaft auf "31 Änderungen bereit zum Sync", und
+"Jetzt synchronisieren" änderte daran nichts. Drei Fehler im Service
+Worker greifen ineinander:
+
+1. Der Replay-Lauf brach beim ersten Eintrag ab, der sich gar nicht mehr
+   senden lässt (`catch { break; }`). Alles dahinter blieb liegen --
+   egal wie oft der Nutzer den Button drückt. Jetzt stoppt der Lauf nur
+   noch, wenn der Worker wirklich offline ist; sonst wird der einzelne
+   Eintrag gezählt und die Schlange läuft weiter.
+
+2. Es gab keine Obergrenze für Fehlversuche. Ein Eintrag, den der Server
+   dauerhaft mit 5xx quittiert, blieb für immer stehen. Neu:
+   QUEUE_MAX_ATTEMPTS = 5, danach wird er verworfen. 401 zählt bewusst
+   nicht als Versuch -- dort ist die Neuanmeldung die Lösung, und ein
+   Re-Login darf den Nutzer keine offenen Änderungen kosten.
+
+3. Die Warteschlange wuchs von selbst: der Fetch-Handler legte *jede*
+   abgebrochene POST/PUT-Anfrage ab. Ein React-Unmount, eine Navigation
+   oder das Suspendieren der PWA durch iOS verwerfen laufende Requests,
+   und genau die landeten als "ausstehende Änderung" in der Leiste.
+   Abbrüche werden jetzt durchgereicht statt eingereiht, und nur noch
+   same-origin /api/-Mutationen sind überhaupt replay-fähig.
+
+Dazu zwei kleinere Defekte im selben Pfad:
+
+- "Aktualisiert —" stand fest auf dem Platzhalter, weil den Header
+  `X-Pulse-Cache-Time` niemand gesetzt hat. Der Worker stempelt ihn
+  jetzt auf JSON-API-Antworten, für die ausgelieferte wie für die
+  gecachte Kopie.
+- Der Offline-"Retry"-Knopf sendete REFRESH_CACHE, wofür es keinen
+  Handler gab; der Knopf drehte sich endlos. Handler ergänzt, er
+  aktualisiert die gecachten API-GETs und meldet CACHE_REFRESHED.
+
+Cache-Name auf pulse-v20 gezogen, damit der neue Worker übernimmt. Die
+IndexedDB-Queue bleibt unangetastet: die bereits gestrandeten Einträge
+laufen mit der neuen Logik ab, statt eine Neuinstallation zu brauchen.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018KRwz7ahENmumVdnhQH6Pj
+---
+ public/sw.js | 144 +++++++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 129 insertions(+), 15 deletions(-)
+
+diff --git a/public/sw.js b/public/sw.js
+index 895ea66..c8f43df 100644
+--- a/public/sw.js
++++ b/public/sw.js
+@@ -3,12 +3,19 @@
+ // Offline queue for POST/PUT requests
+ 
+ const CACHE_PREFIX = "pulse-v";
+-const CACHE_NAME = "pulse-v19";
++const CACHE_NAME = "pulse-v20";
+ // Hard-cap on how long a queued request is allowed to sit before we drop it.
+ // Stale entries cause the "X changes ready to sync" banner to live forever
+ // when the server has since rejected the payload (404/422/etc).
+ const QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
++// A queued request that the server keeps refusing must not outlive a handful
++// of replays. Without a cap, one poisoned entry pinned the banner open for
++// good and every "Sync now" press was a no-op.
++const QUEUE_MAX_ATTEMPTS = 5;
+ const QUEUE_NAME = "pulse-offline-queue";
++// Stamped onto cached API responses so the banner can say how old the data is
++// instead of the permanent placeholder dash it showed before.
++const FRESHNESS_HEADER = "X-Pulse-Cache-Time";
+ const STATIC_ASSETS = [
+   "/",
+   "/manifest.json",
+@@ -91,26 +98,56 @@ async function removeFromQueue(id) {
+   });
+ }
+ 
++// Record a failed replay so repeated failures eventually retire the entry.
++async function markAttempt(entry, status) {
++  const db = await openDB();
++  const tx = db.transaction(QUEUE_NAME, "readwrite");
++  tx.objectStore(QUEUE_NAME).put({
++    ...entry,
++    attempts: (entry.attempts || 0) + 1,
++    lastAttemptAt: Date.now(),
++    lastStatus: status,
++  });
++  await new Promise((resolve, reject) => {
++    tx.oncomplete = resolve;
++    tx.onerror = reject;
++  });
++}
++
++function isAbortError(error) {
++  return !!error && (error.name === "AbortError" || error.name === "NotAllowedError");
++}
++
+ // ── Replay queued requests when back online ──
+ //
+ // Removal rules — without these, ONE bad entry made the "X changes ready to
+ // sync" banner stick forever, because the loop only ever removed entries that
+ // came back 2xx:
+ //   - res.ok (2xx)                      → success, remove
+-//   - 401 / 408 / 429 / 5xx             → retryable, keep
++//   - 401                               → session gone, keep, never counts an
++//                                         attempt (re-login is the fix)
++//   - 408 / 429 / 5xx / network error   → retryable, keep and count an attempt
+ //   - any other 4xx (404 / 409 / 422…)  → permanently rejected, remove
+ //   - Entry older than QUEUE_MAX_AGE_MS → stale, remove regardless of status
+-//   - Network error                     → still offline, break loop, keep
++//   - QUEUE_MAX_ATTEMPTS reached        → unsendable, remove
++//
++// The loop only stops early when the worker is genuinely offline. A single
++// entry that cannot be sent at all (its body no longer round-trips, its target
++// route is gone) used to `break` the run and strand every entry behind it —
++// that is what left "31 Änderungen bereit zum Sync" on screen with a "Sync
++// now" button that changed nothing.
+ async function replayQueue() {
+   const queue = await getQueue();
+   if (queue.length === 0) {
+-    await notifyClients({ replayed: 0, dropped: 0, remaining: 0 });
++    await notifyClients({ replayed: 0, dropped: 0, remaining: 0, stuck: 0 });
+     return;
+   }
+ 
+   let replayed = 0;
+   let dropped = 0;
++  let stuck = 0;
+   let sessionExpired = false;
++  let offline = false;
+   const now = Date.now();
+ 
+   for (const entry of queue) {
+@@ -120,11 +157,19 @@ async function replayQueue() {
+       dropped++;
+       continue;
+     }
++    // Tried often enough and never accepted — retire it instead of showing the
++    // banner forever.
++    if ((entry.attempts || 0) >= QUEUE_MAX_ATTEMPTS) {
++      await removeFromQueue(entry.id);
++      dropped++;
++      continue;
++    }
+     try {
+       const res = await fetch(entry.url, {
+         method: entry.method,
+         headers: entry.headers,
+         body: entry.body,
++        credentials: "same-origin",
+       });
+       if (res.ok) {
+         await removeFromQueue(entry.id);
+@@ -133,31 +178,83 @@ async function replayQueue() {
+       }
+       // 401 specifically means "log in again" — clicking "Sync now" forever
+       // will never fix it, so flag it distinctly from generic retryable errors.
++      // Deliberately not counted as an attempt: a re-login must not have cost
++      // the user their pending edits.
+       if (res.status === 401) {
+         sessionExpired = true;
++        stuck++;
+         continue;
+       }
+-      // Retryable transient failures → leave in queue for next tick.
++      // Retryable transient failures → leave in queue for the next tick.
+       if (res.status === 408 || res.status === 429 || res.status >= 500) {
++        await markAttempt(entry, res.status);
++        stuck++;
+         continue;
+       }
+       // Any other 4xx is a permanent rejection (404, 409, 422, …). Stop trying.
+       await removeFromQueue(entry.id);
+       dropped++;
+     } catch {
+-      // Still offline — stop the loop but keep the remaining entries.
+-      break;
++      // Genuinely offline: keep everything and stop, there is nothing to gain
++      // from hammering the rest of the queue.
++      if (typeof navigator !== "undefined" && navigator.onLine === false) {
++        offline = true;
++        break;
++      }
++      // Online but this one entry will not go out. Count it and keep going so
++      // the healthy entries behind it still drain.
++      await markAttempt(entry, 0);
++      stuck++;
+     }
+   }
+ 
+   const remaining = (await getQueue()).length;
+-  await notifyClients({ replayed, dropped, remaining, sessionExpired });
++  await notifyClients({ replayed, dropped, remaining, stuck, sessionExpired, offline });
+ }
+ 
+-async function notifyClients(payload) {
++async function broadcast(message) {
+   const clients = await self.clients.matchAll();
+   clients.forEach((client) => {
+-    client.postMessage({ type: "QUEUE_UPDATED", ...payload });
++    client.postMessage(message);
++  });
++}
++
++async function notifyClients(payload) {
++  await broadcast({ type: "QUEUE_UPDATED", ...payload });
++}
++
++// Re-fetch every cached API GET so "Retry" while offline actually does
++// something. The client has always listened for CACHE_REFRESHED; nothing ever
++// sent it, so the button just span forever.
++async function refreshApiCache() {
++  const cache = await caches.open(CACHE_NAME);
++  const requests = (await cache.keys()).filter((request) => new URL(request.url).pathname.startsWith("/api/"));
++  let refreshed = 0;
++  for (const request of requests) {
++    try {
++      const response = await fetch(request);
++      if (response.ok) {
++        await cache.put(request, await stampFreshness(response.clone(), Date.now()));
++        refreshed++;
++      }
++    } catch {
++      break; // still offline — stop early, the cache keeps what it had
++    }
++  }
++  await broadcast({ type: "CACHE_REFRESHED", refreshed });
++}
++
++// Record when a JSON API response was actually fetched from the server so the
++// banner can render a real age instead of the "—" placeholder.
++async function stampFreshness(response, timestamp) {
++  const type = response.headers.get("Content-Type") || "";
++  if (!type.includes("application/json")) return response;
++  const headers = new Headers(response.headers);
++  headers.set(FRESHNESS_HEADER, String(timestamp));
++  return new Response(await response.arrayBuffer(), {
++    status: response.status,
++    statusText: response.statusText,
++    headers,
+   });
+ }
+ 
+@@ -208,11 +305,14 @@ self.addEventListener("message", (event) => {
+       event.source.postMessage({ type: "QUEUE_DATA", queue });
+     });
+   }
++  if (event.data && event.data.type === "REFRESH_CACHE") {
++    refreshApiCache();
++  }
+   // User explicitly wants to dismiss everything (escape hatch for the
+   // "X changes ready to sync" banner when the entries are stale/unwanted).
+   if (event.data && event.data.type === "CLEAR_QUEUE") {
+     clearQueue().then(() => {
+-      notifyClients({ replayed: 0, dropped: 0, remaining: 0, cleared: true });
++      notifyClients({ replayed: 0, dropped: 0, remaining: 0, stuck: 0, cleared: true });
+     });
+   }
+ });
+@@ -237,18 +337,30 @@ self.addEventListener("fetch", (event) => {
+ 
+   // POST/PUT requests: try to send, queue if offline
+   if (event.request.method === "POST" || event.request.method === "PUT") {
++    // Only our own API mutations are worth replaying: a cross-origin POST does
++    // not carry the session cookie a replay needs, and replaying it blind was
++    // pure noise in the queue.
++    const queueable = url.origin === self.location.origin && url.pathname.startsWith("/api/");
+     event.respondWith(
+       event.request
+         .clone()
+         .text()
+         .then((bodyText) => {
+-          return fetch(event.request.clone()).catch(async () => {
++          return fetch(event.request.clone()).catch(async (error) => {
++            // A request the page itself cancelled is not offline work. React
++            // aborting on unmount, a navigation away, or iOS suspending the
++            // PWA mid-flight all reject here, and queueing those is what grew
++            // the counter on its own while the user was simply using the app.
++            if (!queueable || isAbortError(error) || event.request.signal?.aborted) {
++              throw error;
++            }
+             // Queue the request for later replay
+             await addToQueue({
+               url: event.request.url,
+               method: event.request.method,
+               headers: Object.fromEntries(event.request.headers.entries()),
+               body: bodyText,
++              attempts: 0,
+               timestamp: Date.now(),
+               path: url.pathname,
+             });
+@@ -277,11 +389,13 @@ self.addEventListener("fetch", (event) => {
+   if (url.pathname.startsWith("/api/")) {
+     event.respondWith(
+       fetch(event.request)
+-        .then((response) => {
++        .then(async (response) => {
+           // Cache successful API responses for offline
+           if (response.ok) {
+-            const clone = response.clone();
+-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
++            const stamped = await stampFreshness(response.clone(), Date.now());
++            const cacheCopy = stamped.clone();
++            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cacheCopy));
++            return stamped;
+           }
+           return response;
+         })
+-- 
+2.43.0
+
