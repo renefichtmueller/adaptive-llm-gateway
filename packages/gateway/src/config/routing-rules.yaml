@@ -56,6 +56,12 @@ rules:
     prompt_template: pre_classifier
     description: "Generate new code from a spec"
 
+  code_generation:
+    model: qwen2.5:32b
+    tier: large
+    prompt_template: pre_classifier
+    description: "Code generation via static routing (the dynamic scorer routes to the Codex bridge)"
+
   # ─── Built-in: translation ──────────────────────────────────────────────
   content_translation_de_en:
     model: qwen2.5:14b
@@ -82,10 +88,4 @@ rules:
     prompt_template: internal_prompt_improve
     description: "Self-improvement: suggest better prompt for a poor result"
 
-# ─── Default tier per fallback path ─────────────────────────────────────
-defaults:
-  fallback_chain:
-    fast:      [qwen2.5:3b, qwen2.5:7b-instruct]
-    medium:    [qwen2.5:14b, qwen2.5:7b-instruct]
-    large:     [qwen2.5:32b, qwen2.5:14b]
-    reasoning: [llama3.3:70b, qwen2.5:32b]
+# Fallback chains live in models.yaml (fallback_chains:).

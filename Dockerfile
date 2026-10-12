@@ -54,9 +54,9 @@ RUN mkdir -p /var/log/llm-gateway && chown -R gateway:gateway /var/log/llm-gatew
 
 USER gateway
 
-EXPOSE 0000
+EXPOSE 8787
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD wget -q -O- http://localhost:0000/health/live || exit 1
+  CMD wget -q -O- http://localhost:8787/health/live || exit 1
 
 CMD ["node", "packages/gateway/dist/server.js"]

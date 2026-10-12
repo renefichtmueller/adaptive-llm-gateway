@@ -1,4 +1,4 @@
-import { createTIPClient, type TIPClientConfig } from '@llm-gateway/client'
+import { createTIPClient, type TIPClient, type TIPClientConfig, type TIPHealth } from '@llm-gateway/client'
 
 export interface ClaudeCodeBridgeConfig extends TIPClientConfig {
   agentId: string
@@ -23,15 +23,13 @@ export interface ClaudeCodeResponse {
 }
 
 export class ClaudeCodeBridge {
-  private client: ReturnType<typeof createTIPClient>
+  private client: TIPClient
   private config: ClaudeCodeBridgeConfig
 
   constructor(config: ClaudeCodeBridgeConfig) {
     this.config = {
-      agentId: 'claude-code-ide',
-      ideVersion: config.ideVersion,
-      extensionVersion: config.extensionVersion,
-      ...config
+      ...config,
+      agentId: config.agentId || 'claude-code-ide'
     }
     this.client = createTIPClient(this.config)
   }
@@ -65,9 +63,10 @@ export class ClaudeCodeBridge {
     const result = await this.client.completion(prompt, {
       maxTokens,
       metadata: {
-        source: 'claude-code-ide',
+        source: this.config.agentId,
         command,
-        version: this.config.ideVersion
+        ideVersion: this.config.ideVersion,
+        extensionVersion: this.config.extensionVersion
       }
     })
 
@@ -76,29 +75,23 @@ export class ClaudeCodeBridge {
       tokens: result.tokens,
       model: result.model,
       fallback: result.fallback,
-      confidence: result.confidence ?? 0
+      confidence: result.confidence
     }
   }
 
-  async status() {
+  status() {
     return this.client.getStatus()
   }
 
-  async health() {
+  async health(): Promise<TIPHealth & { error?: string }> {
     try {
-      const status = await this.status()
-      return {
-        healthy: status.gateway === true || status.ollama !== 'offline',
-        gateway: status.gateway,
-        ollama: status.ollama,
-        mode: status.mode
-      }
+      return await this.client.health()
     } catch (error) {
       return {
         healthy: false,
         gateway: false,
-        ollama: 'offline' as const,
-        mode: 'offline' as const,
+        ollama: 'offline',
+        mode: 'offline',
         error: String(error)
       }
     }

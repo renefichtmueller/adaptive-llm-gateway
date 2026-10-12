@@ -70,15 +70,26 @@ interface AbTest {
 }
 
 // ─── Routing rules YAML ─────────────────────────────────────────────────────
+// The shipped config uses `rules:` as its top-level key; older configs used
+// `routing_rules:`. Reads accept both, and writes preserve the rest of the
+// document (comments are lost on rewrite, but unknown keys are kept).
+
+let rulesTopLevelKey: 'rules' | 'routing_rules' = 'rules';
+let rawDocument: Record<string, unknown> = {};
 
 function loadRoutingRules(): RoutingRulesFile {
   const content = readFileSync(ROUTING_RULES_PATH, 'utf-8');
-  return yaml.load(content) as RoutingRulesFile;
+  rawDocument = (yaml.load(content) ?? {}) as Record<string, unknown>;
+  rulesTopLevelKey = rawDocument['routing_rules'] !== undefined ? 'routing_rules' : 'rules';
+  const source = (rawDocument[rulesTopLevelKey] ?? {}) as Record<string, RoutingRule>;
+  return { routing_rules: source };
 }
 
 function writeRoutingRules(rules: RoutingRulesFile): void {
-  const content = yaml.dump(rules, { lineWidth: 120 });
+  const updatedDocument = { ...rawDocument, [rulesTopLevelKey]: rules.routing_rules };
+  const content = yaml.dump(updatedDocument, { lineWidth: 120 });
   writeFileSync(ROUTING_RULES_PATH, content, 'utf-8');
+  rawDocument = updatedDocument;
 }
 
 // ─── Metrics aggregation ─────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 // Instruments LeanCTX and RTK compression tracking
 // Updated: 2026-04-19
 
-import { Pool, QueryResult } from 'pg';
+import { Pool } from 'pg';
 import { logger } from '../observability/logger.js';
 
 export interface CompressionMetric {

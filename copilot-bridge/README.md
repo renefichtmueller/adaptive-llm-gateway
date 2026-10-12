@@ -7,9 +7,9 @@ Exposes GitHub Copilot as an OpenAI-compatible API endpoint for LLM Gateway inte
 ```
 LLM Gateway
     ↓
-copilot-bridge (port 0000)
+copilot-bridge (port 8791)
     ↓
-GitHub Copilot API Proxy (copilot-api, port 0000)
+GitHub Copilot API Proxy (copilot-api, port 8792)
     ↓
 GitHub Copilot API (requires GitHub subscription)
 ```
@@ -65,14 +65,14 @@ node server.js
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `COPILOT_BRIDGE_PORT` | 0000 | Port for this wrapper |
-| `COPILOT_API_INTERNAL_PORT` | 0000 | Internal port for copilot-api |
+| `COPILOT_BRIDGE_PORT` | 8791 | Port for this wrapper |
+| `COPILOT_API_INTERNAL_PORT` | 8792 | Internal port for copilot-api |
 
 ### Example .env
 
 ```bash
-COPILOT_BRIDGE_PORT=0
-COPILOT_API_INTERNAL_PORT=0000
+COPILOT_BRIDGE_PORT=8791
+COPILOT_API_INTERNAL_PORT=8792
 ```
 
 ## Running
@@ -84,8 +84,8 @@ npm start
 ```
 
 This will:
-1. Start the GitHub Copilot API proxy on port 0000
-2. Start the bridge wrapper on port 0000
+1. Start the GitHub Copilot API proxy on port 8792
+2. Start the bridge wrapper on port 8791
 3. Expose OpenAI-compatible `/v1/chat/completions` endpoint
 
 ### With PM2
@@ -100,7 +100,7 @@ pm2 start server.js --name copilot-bridge
 ### Verify Health
 
 ```bash
-curl http://localhost:0000/health
+curl http://localhost:8791/health
 ```
 
 Response:
@@ -109,7 +109,7 @@ Response:
   "status": "ok",
   "provider": "github-copilot",
   "version": "1.0.0",
-  "copilot_api_port": 0000,
+  "copilot_api_port": 8792,
   "healthy": true
 }
 ```
@@ -119,7 +119,7 @@ Response:
 ### Direct API Call
 
 ```bash
-curl -X POST http://localhost:0000/v1/chat/completions \
+curl -X POST http://localhost:8791/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4",
@@ -139,7 +139,7 @@ curl -X POST http://localhost:0000/v1/chat/completions \
 Once integrated into the gateway:
 
 ```bash
-curl -X POST http://localhost:0000/api/generate \
+curl -X POST http://localhost:8791/api/generate \
   -H "Content-Type: application/json" \
   -d '{
     "model": "copilot",
@@ -161,7 +161,7 @@ export const EXTERNAL_PROVIDERS: ExternalProviderConfig = {
   // ... other providers
   copilot: {
     name: 'GitHub Copilot',
-    baseUrl: 'http://localhost:0000',
+    baseUrl: 'http://localhost:8791',
     requiresAuth: false, // Auth handled internally by copilot-api
     models: ['gpt-4', 'gpt-3.5-turbo'],
     rateLimit: 60, // requests per minute
@@ -180,8 +180,8 @@ export const EXTERNAL_PROVIDERS: ExternalProviderConfig = {
       name: 'copilot-bridge',
       script: './server.js',
       env: {
-        COPILOT_BRIDGE_PORT: 0000,
-        COPILOT_API_INTERNAL_PORT: 0000
+        COPILOT_BRIDGE_PORT: 8791,
+        COPILOT_API_INTERNAL_PORT: 8792
       },
       error_file: '/var/log/llm-gateway/copilot-bridge.err.log',
       out_file: '/var/log/llm-gateway/copilot-bridge.out.log',
@@ -235,8 +235,8 @@ npm run auth
 ### Port Already in Use
 
 ```bash
-# Find process using port 0000
-lsof -i :0000
+# Find process using port 8791
+lsof -i :8791
 
 # Kill if needed
 kill -9 <PID>
@@ -246,7 +246,7 @@ kill -9 <PID>
 
 ```bash
 # Test copilot-api directly
-npx copilot-api@latest start --port 0000 --verbose
+npx copilot-api@latest start --port 8792 --verbose
 
 # Check for GitHub subscription
 npm run debug
