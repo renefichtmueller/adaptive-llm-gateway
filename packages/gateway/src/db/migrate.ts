@@ -63,6 +63,8 @@ export async function runMigrations(): Promise<void> {
       { name: '001_initial.sql', path: './migrations/001_initial.sql' },
       { name: '002-tokenvault-cost-tracking.sql', path: './migrations/002-tokenvault-cost-tracking.sql' },
       { name: '003-dashboard.sql', path: './migrations/003-dashboard.sql' },
+      { name: '010-feature-tables.sql', path: './migrations/010-feature-tables.sql' },
+      { name: '011-learning-service.sql', path: './migrations/011-learning-service.sql' },
     ];
 
     for (const { name, path } of migrations) {

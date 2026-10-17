@@ -1,4 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+ 
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const Ajv = require('ajv');
