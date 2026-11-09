@@ -41,10 +41,10 @@ import {
   validationFailuresTotal,
 } from '../observability/metrics.js';
 import { logger } from '../observability/logger.js';
-import { calculateCost, calculateSavings, calculateCompressionRatio } from '../observability/cost-calculator.js';
+import { calculateCost, calculateSavings } from '../observability/cost-calculator.js';
 import { logCompressionMetric, logCostImpact } from '../utils/tokenvault-hooks.js';
 import { costStream } from '../observability/cost-stream.js';
-import { recordRoutingDecision, trackFallbackChain } from '../observability/routing-instrumentation.js';
+import { recordRoutingDecision } from '../observability/routing-instrumentation.js';
 import { createRequestLogger } from '../modules/request-logger.js';
 import { compressContext, type CompressionResult } from '../modules/context-compressor.js';
 import {
@@ -61,9 +61,7 @@ import {
   getRedactMode,
   shouldRedactFor,
 } from '../modules/pii-redaction.js';
-import { splitReasoningTrace, storeReasoningTrace } from '../modules/reasoning-trace.js';
-import { getRoutingOverride } from '../modules/workspace-presets.js';
-import { runPreComplete, runPostComplete } from '../modules/plugin-system.js';
+import { runPreComplete } from '../modules/plugin-system.js';
 import { getAdaptiveRecommendation } from '../modules/adaptive-routing.js';
 import { guardOutputStream, getOutputDefenseMode } from '../modules/output-defense.js';
 
@@ -257,7 +255,35 @@ async function classifyAndRoute(taskType: string | undefined, caller: string, in
   try {
     decision = route(resolved, caller, { model: options?.model, temperature: options?.temperature, max_tokens: options?.max_tokens });
   } catch (err) {
-    throw new Error(err instanceof Error ? err.message : 'Failed to route request');
+    throw new Error(err instanceof Error ? err.message : 'Failed to route request', { cause: err });
+  }
+
+  // Adaptive routing: when the caller did not pin a model explicitly, prefer
+  // what the learner has found to work best (and cheapest) for this task
+  // type. The learned fallback chain goes first; the static chain remains as
+  // the tail so we never lose coverage.
+  if (!options?.model) {
+    const reco = getAdaptiveRecommendation(resolved);
+    if (reco && reco.preferredModel !== decision.model) {
+      const staticTail = decision.fallback_chain.filter(
+        (m) => m !== reco.preferredModel && !reco.fallbackChain.includes(m),
+      );
+      logger.info(
+        {
+          taskType: resolved,
+          staticModel: decision.model,
+          adaptiveModel: reco.preferredModel,
+          samples: reco.rationale.samples,
+          successRate: reco.rationale.successRate,
+        },
+        'Adaptive routing recommendation applied',
+      );
+      decision = {
+        ...decision,
+        model: reco.preferredModel,
+        fallback_chain: [reco.preferredModel, ...reco.fallbackChain, ...staticTail],
+      };
+    }
   }
 
   return { taskType: resolved, decision, classificationResult };
@@ -406,9 +432,8 @@ async function executeCompletion(body: CompletionRequest, startMs: number, callI
 
   // ─── Prompt-injection defense (configurable via INJECTION_DEFENSE_MODE) ──
   const injectionMode = getInjectionMode();
-  let injectionScan: InjectionScanResult | null = null;
   if (injectionMode !== 'off' && !isCallerExempt(caller)) {
-    injectionScan = scanForInjection(body.input);
+    const injectionScan: InjectionScanResult = scanForInjection(body.input);
     const action = decideAction(injectionMode, injectionScan);
     if (action === 'block') {
       logger.warn(
@@ -612,11 +637,19 @@ async function executeCompletion(body: CompletionRequest, startMs: number, callI
     void recordSubscriptionUsage(getPool(), subscriptionId, (ollamaResponse.eval_count ?? 0) + (ollamaResponse.prompt_eval_count ?? 0));
   }
 
-  const responseBody = {
+  const responseBody: Record<string, unknown> = {
     ...buildResponseBody(callId, decision, taskType, confidenceResult, outputText, latencyMs, ollamaResponse, costUsd, costSavedUsd, options?.return_validation_details ?? false, validationOutput),
     compression: buildCompressionResponse(compression),
     ...(poolRouteApplied ? { pool_route: { applied: true, reason: poolRouteApplied } } : {}),
   };
+
+  // PII restore: the caller gets the original values back, while the audit
+  // log, review queue, and response cache keep the redacted form so PII
+  // never persists and never leaks to other callers via cache hits.
+  const callerBody =
+    piiRestoreMap && typeof responseBody['output'] === 'string'
+      ? { ...responseBody, output: restorePii(responseBody['output'] as string, piiRestoreMap) }
+      : responseBody;
 
   // ─── Cache write — only successful, validated responses are cached ──────
   // Skip caching when:
@@ -636,7 +669,7 @@ async function executeCompletion(body: CompletionRequest, startMs: number, callI
     });
   }
 
-  return { statusCode: 200, body: responseBody };
+  return { statusCode: 200, body: callerBody };
 }
 
 function buildCompressionResponse(compression: CompressionResult): Record<string, unknown> {

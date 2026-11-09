@@ -131,7 +131,9 @@ export async function getCallerDeepDive(db: Pool, caller: string): Promise<Calle
         key: r.fact_key, value: r.fact_value,
         confidence: parseFloat(r.confidence), source: r.source ?? '',
       }));
-    } catch {}
+    } catch {
+      // caller_knowledge table may not exist yet — stats stay empty
+    }
 
     // Hourly heatmap (24h)
     const hourly = await db.query(`

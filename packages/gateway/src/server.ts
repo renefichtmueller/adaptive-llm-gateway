@@ -11,6 +11,7 @@ import { reviewRoute } from './routes/review.js';
 import { dashboardRoute } from './routes/dashboard.js';
 import { streamRoute } from './routes/stream.js';
 import { learningInsightsRoute } from './routes/learning-insights.js';
+import { internalRoute } from './routes/internal.js';
 import { embeddingsRoute } from './routes/embeddings.js';
 import { replayRoute } from './routes/replay.js';
 import { audioRoute } from './routes/audio.js';
@@ -20,6 +21,7 @@ import { loadPlugins } from './modules/plugin-system.js';
 import { startBridgeWatchdog } from './modules/bridge-watchdog.js';
 import { ingestPeerStats, scheduleFederationPublisher, buildStats } from './modules/federated-stats.js';
 import { scheduleAdaptiveLearner, getAllRecommendations } from './modules/adaptive-routing.js';
+import { scheduleLearnedBanlistRefresh } from './banlists/learned-banlist.js';
 import { staticRoute } from './routes/static.js';
 import { getPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
@@ -32,7 +34,6 @@ import { dirname, join } from 'path';
 import { readFileSync, existsSync } from 'fs';
 import {
   getTLSConfig,
-  loadTLSCertificates,
   validateTLSConfig,
   validateDatabaseSSL,
   registerHSTSMiddleware,
@@ -98,10 +99,11 @@ async function buildServer() {
     .filter(Boolean);
   await server.register(fastifyCors, {
     origin: [
-      'http://localhost:0000',
-      'http://localhost:0000',
-      'http://localhost:0000',
-      'http://localhost:0000',
+      // Gateway itself (dashboard) + the agent adapters (ADR-0005)
+      'http://localhost:8787',
+      'http://127.0.0.1:8787',
+      'http://localhost:8788',
+      'http://127.0.0.1:8788',
       ...corsAllowList,
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -138,6 +140,7 @@ async function buildServer() {
   await server.register(classifyRoute, { prefix: '/v1' });
   await server.register(reviewRoute, { prefix: '/v1' });
   await server.register(learningInsightsRoute, { prefix: '/v1' });
+  await server.register(internalRoute);
   await server.register(healthRoute);
   await server.register(metricsRoute);
   await server.register(staticRoute);
@@ -198,7 +201,7 @@ async function main() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
-  const port = parseInt(process.env['PORT'] ?? '0000', 10);
+  const port = parseInt(process.env['PORT'] ?? '8787', 10);
   const host = process.env['HOST'] ?? '0.0.0.0';
 
   try {
@@ -242,9 +245,11 @@ async function main() {
     }
 
     // Adaptive routing learner (cost-aware recommendations from llm_calls)
+    // + learned banlist (ban-learner promotions become active ban terms)
     try {
       const pool = getPool();
       scheduleAdaptiveLearner(pool);
+      scheduleLearnedBanlistRefresh(pool);
     } catch (err) {
       logger.warn({ err }, 'Adaptive learner scheduling failed');
     }

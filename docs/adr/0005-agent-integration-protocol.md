@@ -93,12 +93,20 @@ Use JSON-RPC 2.0 over HTTP/WebSocket:
 ## Implementation Plan
 
 ### Phase 2G.1: Claude Code Integration (Week 1)
-```bash
-# Extend @llm-gateway/client with agent metadata
-createTIPClient({
+```ts
+// Extend @llm-gateway/client with agent metadata.
+// createTIPClient is the agent-facing factory of the TIP integration
+// protocol; it wraps the gateway with a transparent local-Ollama fallback.
+import { createTIPClient } from '@llm-gateway/client';
+
+const client = createTIPClient({
   agentId: 'claude-code',
-  fallback: { ollamaUrl: 'localhost:11434' }
-})
+  gatewayUrl: 'http://localhost:8787',        // optional, env: LLM_GATEWAY_URL
+  fallback: { ollamaUrl: 'localhost:11434' }, // or top-level ollamaUrl
+});
+
+const result = await client.completion('Explain this code: …', { maxTokens: 500 });
+// → { text, model, tokens: {input, output}, confidence: 0–1, fallback, … }
 ```
 
 ### Phase 2G.2: Codex/Copilot (Week 2)
@@ -141,3 +149,19 @@ npm install -D @types/node-lsp-server
    - Option A: Always stream (SSE)
    - Option B: Support both (`?stream=true/false`)
    - **Decision pending**: Codex/Copilot compatibility check needed
+
+## Implementation Note (2026-08)
+
+The TIP client now ships in `@llm-gateway/client` (`packages/client/src/tip.ts`):
+
+- `createTIPClient(config)` — ADR-style config object (`agentId`, `gatewayUrl`,
+  `ollamaUrl`/`fallback.ollamaUrl`, `timeout`); a legacy `createTIPClient(url)`
+  string signature is kept for backwards compatibility.
+- Requests go to the gateway's `/v1/completion` (the agent id is sent as
+  `caller`); when the gateway is unreachable the client transparently falls
+  back to local Ollama and marks the response with `fallback: true`.
+- Confidence is normalized to 0–1 for agents (the gateway itself reports 0–10).
+
+Consumers: `packages/claude-code-bridge`, `packages/codex-lsp-adapter`,
+`packages/chatgpt-api-adapter`; per-agent learning tables live in
+`packages/learning-integration` (Phase 2G.4).

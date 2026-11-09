@@ -13,7 +13,7 @@ import {
   generateTOTPSecret,
   calculateAuthScoreImpact,
   validateNISTAuthentication
-} from '../nist-auth';
+} from '../nist-auth.js';
 
 describe('NIST SP 800-63B Authentication Module', () => {
   describe('Password Complexity Validation', () => {

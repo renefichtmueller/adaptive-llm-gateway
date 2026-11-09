@@ -312,6 +312,14 @@ function extractUserMessages(
 
 // ── Keyword Scoring ────────────────────────────────────────────────────────
 
+/**
+ * Flexible code-generation phrasing the exact-phrase trie misses:
+ * "Write a TypeScript function …", "Create a React component …",
+ * "Implement a REST API …" — verb + (article/adjectives) + code artifact.
+ */
+const CODE_GEN_PATTERN =
+  /\b(?:write|create|build|implement|generate|scaffold|develop|code)\b[^.?!\n]{0,60}?\b(?:function|script|class|component|module|api|endpoint|service|schema|handler|middleware|crud|library|cli|app(?:lication)?|program|parser|query|migration|test\s+suite)s?\b/i;
+
 function scoreKeywordDimensions(
   weightedMessages: readonly WeightedMessage[],
 ): ReadonlyMap<string, number> {
@@ -331,6 +339,12 @@ function scoreKeywordDimensions(
       const current = scores.get(dimName) ?? 0;
       const contribution = normalizeKeywordScore(dimMatches) * weight;
       scores.set(dimName, current + contribution);
+    }
+
+    // Structural code-generation phrasing counts like one keyword match.
+    if (CODE_GEN_PATTERN.test(text)) {
+      const current = scores.get('codeGeneration') ?? 0;
+      scores.set('codeGeneration', Math.max(current, 0.3 * weight));
     }
   }
 
@@ -732,12 +746,14 @@ function handleFormalLogicOverride(
 
 interface ScoreOverridesInput {
   tier: Tier;
+  score: number;
   confidence: number;
   reason: string;
 }
 
 interface ScoreOverridesOutput {
   tier: Tier;
+  score: number;
   confidence: number;
   reason: string;
 }
@@ -748,13 +764,16 @@ function applyScoreOverrides(
   input: ScorerInput,
   totalChars: number,
 ): ScoreOverridesOutput {
-  let { tier, confidence, reason } = state;
+  let { tier, score, confidence, reason } = state;
 
-  // Code generation override
+  // Code generation override. Lift score/confidence into the
+  // code_generation band so downstream consumers see a coherent result.
   const codeGenDim = dimensions.find((d) => d.name === 'codeGeneration');
   if (codeGenDim && codeGenDim.rawScore > 0.25) {
     tier = 'code_generation';
     reason = 'code generation keywords detected';
+    score = Math.max(score, TIER_BOUNDARIES.reasoning + 0.05);
+    confidence = Math.max(confidence, 0.8);
   }
 
   // Tool floor
@@ -776,7 +795,7 @@ function applyScoreOverrides(
     reason = 'ambiguous (confidence < 0.45, defaulting to medium)';
   }
 
-  return { tier, confidence, reason };
+  return { tier, score, confidence, reason };
 }
 
 // ── Main Scoring Function ──────────────────────────────────────────────────
@@ -802,15 +821,15 @@ export function scoreRequest(
   }
 
   const momentum = computeSessionMomentum(lastUserText.length);
-  const score = rawScore + momentum;
+  let score = rawScore + momentum;
 
   let tier = assignTier(score);
   let confidence = computeConfidence(score);
   let reason = `scored ${score.toFixed(4)} across 23 dimensions`;
 
   const totalChars = input.messages.reduce((sum, m) => sum + (m.content?.length ?? 0), 0);
-  const overrides = applyScoreOverrides({ tier, confidence, reason }, dimensions, input, totalChars);
-  ({ tier, confidence, reason } = overrides);
+  const overrides = applyScoreOverrides({ tier, score, confidence, reason }, dimensions, input, totalChars);
+  ({ tier, score, confidence, reason } = overrides);
 
   recordSessionTier(tier);
 

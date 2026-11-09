@@ -74,7 +74,7 @@ Model Selection (claude, Ollama, external)
 ## Environment Variables
 
 ```bash
-GATEWAY_URL=http://localhost:0000  # LLM Gateway endpoint
+GATEWAY_URL=http://localhost:8787  # LLM Gateway endpoint
 OLLAMA_URL=localhost:11434              # Local Ollama fallback
 AGENT_ID=codex-lsp-server                      # Agent identifier
 LOG_LEVEL=debug                                # Logging level
@@ -132,13 +132,13 @@ Tests cover:
 ### Server not connecting
 
 1. Check if LSP server is running: `lsof -i :protocol`
-2. Verify gateway is accessible: `curl http://localhost:0000/health`
+2. Verify gateway is accessible: `curl http://localhost:8787/health`
 3. Check logs: `LOG_LEVEL=debug codex-lsp`
 
 ### Slow completions
 
 1. Reduce `maxTokens` in completion requests
-2. Check gateway latency: `curl -w "@curl-format.txt" http://localhost:0000/health`
+2. Check gateway latency: `curl -w "@curl-format.txt" http://localhost:8787/health`
 3. Verify Ollama is running if using fallback
 
 ### Poor suggestion quality
