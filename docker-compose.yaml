@@ -26,10 +26,10 @@ services:
     build: .
     container_name: llm-gateway
     ports:
-      - "${PORT:-0}:${PORT:-0}"
+      - "${PORT:-8787}:8787"
     environment:
       NODE_ENV: production
-      PORT: "0000"
+      PORT: "8787"
       DATABASE_URL: "postgresql://gateway:gateway@postgres:5432/llm_gateway"
       OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
@@ -63,10 +63,33 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O-", "http://localhost:0000/health"]
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8787/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - gateway-net
+
+  # Autonomous learning engine: ban learner (30 min), few-shot curator (1h),
+  # routing optimizer (6h), prompt optimizer (12h), daily learning report,
+  # weekly fine-tuning trigger. Shares the gateway database; calls the
+  # gateway for internal LLM analysis and config reloads.
+  llm-learning:
+    build:
+      context: .
+      dockerfile: Dockerfile.learning
+    container_name: llm-learning
+    environment:
+      DATABASE_URL: "postgresql://gateway:gateway@postgres:5432/llm_gateway"
+      GATEWAY_URL: "http://llm-gateway:8787"
+      INTERNAL_SECRET: "${INTERNAL_SECRET:-internal-learning-secret}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_started
+    restart: unless-stopped
     networks:
       - gateway-net
 

@@ -17,7 +17,7 @@ npm install @llm-gateway/chatgpt-api-adapter
 ### As a Standalone Server
 
 ```bash
-# Start the adapter (listens on port 0000)
+# Start the adapter (listens on port 8788)
 npx chatgpt-api
 
 # Or with custom port
@@ -26,7 +26,7 @@ CHATGPT_API_PORT=8080 npx chatgpt-api
 # Or in Node.js
 import ChatGPTAPIAdapter from '@llm-gateway/chatgpt-api-adapter'
 
-const adapter = new ChatGPTAPIAdapter(0000)
+const adapter = new ChatGPTAPIAdapter(8788)
 await adapter.start()
 ```
 
@@ -37,7 +37,7 @@ import OpenAI from 'openai'
 
 const client = new OpenAI({
   apiKey: 'not-needed',
-  baseURL: 'http://localhost:0000/v1'
+  baseURL: 'http://localhost:8788/v1'
 })
 
 const response = await client.chat.completions.create({
@@ -51,7 +51,7 @@ const response = await client.chat.completions.create({
 ### With curl
 
 ```bash
-curl http://localhost:0000/v1/chat/completions \
+curl http://localhost:8788/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4",
@@ -65,7 +65,7 @@ curl http://localhost:0000/v1/chat/completions \
 ### Streaming
 
 ```bash
-curl http://localhost:0000/v1/chat/completions \
+curl http://localhost:8788/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4",
@@ -110,9 +110,9 @@ Model Selection (claude, Ollama, external)
 ## Environment Variables
 
 ```bash
-CHATGPT_API_PORT=0                          # Listen port
-GATEWAY_URL=http://localhost:0000  # LLM Gateway endpoint
-OLLAMA_URL=localhost:11434              # Local Ollama fallback
+CHATGPT_API_PORT=8788                          # Listen port
+GATEWAY_URL=http://localhost:8787  # LLM Gateway endpoint
+OLLAMA_URL=http://localhost:11434              # Local Ollama fallback
 AGENT_ID=chatgpt-api-adapter                   # Agent identifier
 LOG_LEVEL=debug                                # Logging level
 ```
@@ -238,8 +238,8 @@ Tests cover:
 
 ### OpenAI client not connecting
 
-1. Verify adapter is running: `curl http://localhost:0000/health`
-2. Check baseURL in client: should be `http://localhost:0000/v1` (no `/v1` at end)
+1. Verify adapter is running: `curl http://localhost:8788/health`
+2. Check baseURL in client: should be `http://localhost:8788/v1` (with `/v1` at the end)
 3. Ensure gateway is accessible: `curl $GATEWAY_URL/health`
 
 ### Streaming not working
@@ -251,7 +251,7 @@ Tests cover:
 ### Slow responses
 
 1. Check gateway latency: `curl -w "%{time_total}\n" $GATEWAY_URL/health`
-2. Verify model availability: `curl http://localhost:0000/v1/models`
+2. Verify model availability: `curl http://localhost:8788/v1/models`
 3. Check system resources on gateway (CPU, memory, disk)
 
 ## Compatibility

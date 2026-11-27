@@ -637,7 +637,7 @@ export class PatternDetector {
     return detected;
   }
 
-  scoreQuality(patterns: CreditKillingPattern[], intent: IntentDimensions): PromptQualityScore {
+  scoreQuality(patterns: CreditKillingPattern[], _intent: IntentDimensions): PromptQualityScore {
     // Start at 100, deduct per pattern
     let score = 100;
     let clarity = 100;

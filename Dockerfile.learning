@@ -1,0 +1,38 @@
+# ============================================================
+# Learning Engine — runs the six autonomous learning jobs
+# (ban learner, few-shot curator, routing optimizer, prompt
+# optimizer, learning report, fine-tuning trigger) on cron
+# schedules against the shared gateway database.
+# ============================================================
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Workspace manifests first for layer caching
+COPY package.json package-lock.json* ./
+COPY packages/learning/package.json ./packages/learning/package.json
+COPY packages/prompt-optimizer/package.json ./packages/prompt-optimizer/package.json
+
+RUN npm install --workspace=packages/learning --workspace=packages/prompt-optimizer
+
+# prompt-optimizer is a workspace dependency that ships built output
+COPY packages/prompt-optimizer/ ./packages/prompt-optimizer/
+RUN npm run build --workspace=packages/prompt-optimizer
+
+COPY packages/learning/ ./packages/learning/
+
+# Config + prompt templates the jobs read and update. NOTE: inside the
+# container these are a private copy — auto-applied routing/template changes
+# are recorded in the database either way, but only reach the gateway's own
+# config when both containers share these paths via a volume (see
+# docker-compose.yaml) or when the learning engine runs on the host next to
+# the gateway checkout (`npm run learning`).
+COPY packages/gateway/src/config/ ./packages/gateway/src/config/
+COPY packages/gateway/prompts/ ./packages/gateway/prompts/
+
+RUN addgroup -S learning && adduser -S learning -G learning \
+  && chown -R learning:learning /app
+
+USER learning
+
+CMD ["npm", "run", "start", "--workspace=packages/learning"]

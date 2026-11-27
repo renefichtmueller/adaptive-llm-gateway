@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import ChatGPTAPIAdapter from './index'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import ChatGPTAPIAdapter, { chunkText } from './index.js'
 
 describe('ChatGPTAPIAdapter', () => {
   let adapter: ChatGPTAPIAdapter
@@ -79,7 +79,7 @@ describe('ChatGPTAPIAdapter', () => {
     // Test that streaming response format matches OpenAI spec
     const event = {
       id: 'chatcmpl-123',
-      object: 'text_completion.chunk',
+      object: 'chat.completion.chunk',
       created: 1234567890,
       model: 'gpt-4',
       choices: [
@@ -92,8 +92,15 @@ describe('ChatGPTAPIAdapter', () => {
     }
     const jsonStr = JSON.stringify(event)
     expect(jsonStr).toContain('chatcmpl-')
-    expect(jsonStr).toContain('text_completion.chunk')
+    expect(jsonStr).toContain('chat.completion.chunk')
     expect(jsonStr).toContain('Hello')
+  })
+
+  it('should chunk streaming text into whitespace-preserving pieces', () => {
+    expect(chunkText('hello world').join('')).toBe('hello world')
+    expect(chunkText('hello world')).toEqual(['hello ', 'world'])
+    expect(chunkText('  leading space')).toEqual(['  ', 'leading ', 'space'])
+    expect(chunkText('')).toEqual([])
   })
 
   it('should handle temperature parameter', () => {

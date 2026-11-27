@@ -1,5 +1,4 @@
-import { Client } from 'postgres'
-import { sql } from 'postgres'
+import type { Sql } from 'postgres'
 
 export interface DailyAgentCost {
   date: string
@@ -19,7 +18,7 @@ export interface LatencySLO {
 }
 
 export class PerAgentMetrics {
-  constructor(private db: Client) {}
+  constructor(private db: Sql) {}
 
   async generateDailyCostReport(date: string): Promise<DailyAgentCost[]> {
     const startOfDay = new Date(date)

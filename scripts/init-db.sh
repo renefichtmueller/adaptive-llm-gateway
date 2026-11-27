@@ -13,5 +13,10 @@ psql -h $DB_HOST -p $DB_PORT -U $PG_USER -c "CREATE DATABASE $DB_NAME OWNER $DB_
 psql -h $DB_HOST -p $DB_PORT -U $PG_USER -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null
 
 echo "Running migrations..."
-PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f packages/gateway/src/db/migrations/001_initial.sql
+# Note: the gateway also applies these automatically at boot (db/migrate.ts);
+# this script exists for provisioning a database before first start.
+for migration in packages/gateway/src/db/migrations/*.sql; do
+  echo "  -> $migration"
+  PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$migration"
+done
 echo "DB initialized"
